@@ -105,7 +105,13 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		return 0;
+	case WM_SETFOCUS:
+		SetLayeredWindowAttributes(main_window, 0, 255, LWA_ALPHA);
+		return DefWindowProc(window, message, wparam, lparam);
+	case WM_KILLFOCUS:
+		SetLayeredWindowAttributes(main_window, 0, 255 * 0.6 , LWA_ALPHA);
+		return DefWindowProc(window, message, wparam, lparam);
 	default:
-		DefWindowProc(window, message, wparam, lparam);
+		return DefWindowProc(window, message, wparam, lparam);
 	}
 }
