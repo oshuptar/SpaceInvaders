@@ -40,6 +40,7 @@ private:
 	void move_enemy_window();
 	void create_bullets();
 	void move_bullets();
+	void on_command(WORD id);
 
 	static constexpr int window_width = 800;
 	static constexpr int window_height = 600;

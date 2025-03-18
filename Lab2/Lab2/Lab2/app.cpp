@@ -1,5 +1,8 @@
 #include "app.h"
 #include <stdexcept>
+#include "resource.h"
+
+//By default, Alt + F4 works on your window because the Windows operating system sends a WM_CLOSE message when the user presses Alt + F4.Your window automatically processes this message unless you override it.
 
 std::wstring const app::s_class_name = L"Space Invaders Window Class";
 
@@ -35,6 +38,8 @@ bool app::register_class()
 	desc.hInstance = app_instance;
 	desc.lpfnWndProc = static_window_proc;
 	desc.lpszClassName = s_class_name.c_str();
+	desc.lpszMenuName = MAKEINTRESOURCEW(ID_MENU);
+	desc.hIcon = LoadIconW(app_instance, MAKEINTRESOURCEW(ID_ICON));
 
 	return RegisterClassExW(&desc) != 0;
 }
@@ -218,8 +223,21 @@ void app::move_bullets()
 	}
 }
 
-LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+void app::on_command(WORD id)
 {
+	switch (id)
+	{
+	case ID_ABOUT:
+		
+		break;
+	case ID_EXIT:
+		DestroyWindow(main_window);
+		break;
+	}
+}
+
+LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+{  
 	switch (message)
 	{
 	case WM_CLOSE:
@@ -251,6 +269,10 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 				create_bullets();
 				break;
 		}
+		break;
+	// WM_COMMAND IS RECEIVED WHENEVER THE ID ITEM IS CHOSEN
+	case WM_COMMAND:
+		on_command(LOWORD(wparam));// the lower 16 bits of the DWORD wparam contains the identifier for the command
 		break;
 	case WM_CTLCOLORSTATIC:
 		HWND hwndStatic;
