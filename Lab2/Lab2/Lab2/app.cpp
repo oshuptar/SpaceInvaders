@@ -16,8 +16,8 @@ player_brush{CreateSolidBrush(RGB(255, 0, 0))}
 
 	register_class();
 	main_window = create_window(style, ex_style);
-	enemy_window = create_child_window(50, 40, window_height/6);
-	player_window = create_child_window(50, 50, window_height - window_height/4);
+	enemy_window = create_child_window(enemy_width, enemy_height, window_width/2 - enemy_width/2, window_height/6);
+	player_window = create_child_window(player_width, player_height, window_width/2 - player_width/2 ,window_height - window_height/4);
 
 	SetLayeredWindowAttributes(main_window, 0, 255, LWA_ALPHA);
 }
@@ -43,8 +43,8 @@ int app::run(int show_window)
 {
 	SetTimer(main_window,1, 50, nullptr);
 	ShowWindow(main_window, show_window);
-	ShowWindow(player_window, SW_SHOWNA);
-	ShowWindow(enemy_window, SW_SHOWNA);
+	/*ShowWindow(player_window, SW_SHOWNA);
+	ShowWindow(enemy_window, SW_SHOWNA);*/
 	MSG msg{};
 	BOOL result = false;
 
@@ -82,13 +82,13 @@ HWND app::create_window(DWORD style, DWORD ex_style, HWND parent)
 	return window;
 }
 
-HWND app::create_child_window(int width, int height, int y)
+HWND app::create_child_window(int width, int height,int x, int y)
 {
 	return CreateWindowExW(0,
 		L"STATIC",
 		nullptr,
-		WS_CHILD | WS_CLIPSIBLINGS,
-		window_width/2 - width/2, y,
+		WS_CHILD | WS_CLIPSIBLINGS | WS_VISIBLE,
+		x, y,
 		width, height,
 		main_window,
 		nullptr,
@@ -120,8 +120,8 @@ LRESULT app::static_window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 void app::move_enemy_window()
 {
 	static int enemy_window_direction = 1; // 1 signs - right; 0 - signs left
-	static int right_bound = window_width / 2 - 50/2 + 25;
-	static int left_bound = window_width / 2 - 50/2 - 25;
+	static int right_bound = window_width / 2 - enemy_width/2 + 25;
+	static int left_bound = window_width / 2 - enemy_width/2 - 25;
 
 	RECT enemy_rc;
 	GetWindowRect(enemy_window, &enemy_rc);
@@ -154,21 +154,16 @@ void app::move_player_window(int direction)
 		if (direction == 1) {
 			GetWindowRect(player_window, &player_rc);
 
-			/*POINT client_coordinates{ player_rc.left, player_rc.top };
-			ScreenToClient(main_window, &client_coordinates)*/;
-
 			new_pos.x = player_rc.left + 10;
 			new_pos.y = player_rc.top;
 
 			ScreenToClient(main_window, &new_pos); // converts creen coordinated relative to the window
 
-			int player_width = player_rc.right - player_rc.left;
-
 			if (new_pos.x + player_width < window_width - 10 - 10) // What is the problem here??
 			{
 				MoveWindow(player_window, new_pos.x, new_pos.y,
 					player_width,
-					player_rc.bottom - player_rc.top,
+					player_height,
 					true); //last parameter is responsible for repainting
 			}
 		}
@@ -183,11 +178,44 @@ void app::move_player_window(int direction)
 			if (new_pos.x > 10)
 			{
 				MoveWindow(player_window, new_pos.x, new_pos.y,
-					player_rc.right - player_rc.left,
-					player_rc.bottom - player_rc.top,
+					player_width,
+					player_height,
 					true); //last parameter is responsible for repainting
 			}
 		}
+}
+
+void app::create_bullets()
+{
+	RECT player_rc;
+	GetWindowRect(player_window, &player_rc);
+
+	POINT client_coordinates{ player_rc.left, player_rc.top };
+	ScreenToClient(main_window, &client_coordinates);
+
+	int x = client_coordinates.x + player_width / 2 - bullet_width / 2;
+	int y = client_coordinates.y;
+	HWND bullet_window = create_child_window(bullet_width, bullet_height, x, y);
+	bullets.push_back(bullet(bullet_window, x, y));
+}
+
+void app::move_bullets()
+{
+	int i = 0;
+	for(auto & bullet : bullets)
+	{
+		bullet.y -= 15;
+
+		if (bullet.y + bullet_height <= 0)
+		{
+			DestroyWindow(bullet.bullet_window);
+			bullets.erase(bullets.begin() + i); // retrives the iterator and removes the bullet from the position i from the vector
+		}
+		else
+			MoveWindow(bullet.bullet_window, bullet.x, bullet.y, bullet_width, bullet_height, true);
+
+		i++;
+	}
 }
 
 LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
@@ -208,6 +236,7 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 		return DefWindowProc(window, message, wparam, lparam);
 	case WM_TIMER:
 		move_enemy_window();
+		move_bullets();
 		break;
 	case WM_KEYDOWN:
 		switch (wparam)
