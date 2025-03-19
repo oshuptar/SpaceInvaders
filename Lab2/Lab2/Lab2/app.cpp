@@ -6,6 +6,8 @@
 
 std::wstring const app::s_class_name = L"Space Invaders Window Class";
 
+int app::enemy_window_direction = 1;
+
 app::app(HINSTANCE instance) : app_instance{ instance }, main_window{},
 screen_size{GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)},
 enemy_brush{CreateSolidBrush(RGB(70,70,255))},
@@ -20,7 +22,7 @@ player_brush{CreateSolidBrush(RGB(255, 0, 0))}
 	register_class();
 	main_window = create_window(style, ex_style);
 	enemy_window = create_child_window(enemy_width, enemy_height, window_width/2 - enemy_width/2, window_height/6);
-	player_window = create_child_window(player_width, player_height, window_width/2 - player_width/2 ,window_height - window_height/4);
+	player_window = create_child_window(player_width, player_height, window_width/2 - player_width/2 , window_height - window_height / 4 - player_height);
 
 	SetLayeredWindowAttributes(main_window, 0, 255, LWA_ALPHA);
 }
@@ -52,14 +54,17 @@ int app::run(int show_window)
 	ShowWindow(enemy_window, SW_SHOWNA);*/
 	MSG msg{};
 	BOOL result = false;
-
+	HACCEL shortcuts = LoadAcceleratorsW(app_instance, MAKEINTRESOURCEW(ID_SHORTCUTS));
 	while ((result = GetMessageW(&msg, nullptr, 0, 0)) != 0)
 	{
 		if (result == -1)
 			return EXIT_FAILURE;
 
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
+		// If non-zero then the accelerators are processed
+		if (TranslateAcceleratorW(msg.hwnd, shortcuts, &msg) == 0) {
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
 	}
 }
 
@@ -124,9 +129,8 @@ LRESULT app::static_window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 
 void app::move_enemy_window()
 {
-	static int enemy_window_direction = 1; // 1 signs - right; 0 - signs left
-	static int right_bound = window_width / 2 - enemy_width/2 + 25;
-	static int left_bound = window_width / 2 - enemy_width/2 - 25;
+	int right_bound = window_width / 2 - enemy_width/2 + 25;
+	int left_bound = window_width / 2 - enemy_width/2 - 25;
 
 	RECT enemy_rc;
 	GetWindowRect(enemy_window, &enemy_rc);
@@ -206,20 +210,18 @@ void app::create_bullets()
 
 void app::move_bullets()
 {
-	int i = 0;
-	for(auto & bullet : bullets)
+	for (int i = 0; i < bullets.size(); i++)
 	{
-		bullet.y -= 15;
+		bullets[i].y -= 15;
 
-		if (bullet.y + bullet_height <= 0)
+		if (bullets[i].y + bullet_height <= 0)
 		{
-			DestroyWindow(bullet.bullet_window);
+			DestroyWindow(bullets[i].bullet_window);
 			bullets.erase(bullets.begin() + i); // retrives the iterator and removes the bullet from the position i from the vector
+			i--; // because all of the values are shifted
 		}
 		else
-			MoveWindow(bullet.bullet_window, bullet.x, bullet.y, bullet_width, bullet_height, true);
-
-		i++;
+			MoveWindow(bullets[i].bullet_window, bullets[i].x, bullets[i].y, bullet_width, bullet_height, true);
 	}
 }
 
@@ -228,16 +230,32 @@ void app::on_command(WORD id)
 	switch (id)
 	{
 	case ID_ABOUT:
-		
 		break;
 	case ID_EXIT:
 		DestroyWindow(main_window);
+		break;
+	case ID_NEW_GAME:
+		reset_game();
+		break;
+	case ID_SMALL_SIZE:
+		resize_window(0.5);
+		break;
+	case ID_MEDIUM_SIZE:
+		resize_window(1);
+		break;
+	case ID_LARGE_SIZE:
+		resize_window(1.5);
 		break;
 	}
 }
 
 LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {  
+	std::wstring scoreText;
+	PAINTSTRUCT ps;
+	HBRUSH brush;
+	HDC dc;
+
 	switch (message)
 	{
 	case WM_CLOSE:
@@ -255,7 +273,20 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 	case WM_TIMER:
 		move_enemy_window();
 		move_bullets();
-		break;
+		return 0;
+	case WM_PAINT:
+		dc = BeginPaint(window, &ps);
+		RECT paintArea = ps.rcPaint; // we restrict painting only to the specific area
+		brush = CreateSolidBrush(RGB(255, 255, 255));
+		FillRect(dc, &paintArea, brush);
+
+		scoreText = L"Score: " + std::to_wstring(score);
+		TextOutW(dc, 10, 10, scoreText.c_str(), scoreText.length());
+
+		DeleteObject(brush);
+		EndPaint(window, &ps);
+		return 0;
+
 	case WM_KEYDOWN:
 		switch (wparam)
 		{
@@ -269,11 +300,11 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 				create_bullets();
 				break;
 		}
-		break;
+		return 0;
 	// WM_COMMAND IS RECEIVED WHENEVER THE ID ITEM IS CHOSEN
 	case WM_COMMAND:
 		on_command(LOWORD(wparam));// the lower 16 bits of the DWORD wparam contains the identifier for the command
-		break;
+		return 0;
 	case WM_CTLCOLORSTATIC:
 		HWND hwndStatic;
 		hwndStatic = reinterpret_cast<HWND>(lparam);
@@ -288,9 +319,93 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 	}
 }
 
+void app::reset_game()
+{
+	for (auto& bullet : bullets)
+	{
+		DestroyWindow(bullet.bullet_window);
+	}
+	bullets.clear();
+
+	MoveWindow(player_window, window_width / 2 - player_width / 2, window_height - window_height / 4 - player_height, player_width, player_height, true);
+	MoveWindow(enemy_window, window_width / 2 - enemy_width / 2, window_height / 6, enemy_width, enemy_height, true);
+	enemy_window_direction = 1;
+}
+
+
+void app::resize_window(float factor)
+{
+	// this ensured nothing is redrawed if the size was not changed
+	if (window_width == default_window_width * factor && window_height == default_window_height * factor)
+		return; 
+
+	int prev_window_width = window_width;
+	int prev_window_height = window_height;
+
+	// WE probably need to scale the values accordingly 
+	window_width = default_window_width * factor;
+	window_height = default_window_height * factor;
+
+	int x = screen_size.x / 2 - window_width / 2;
+	int y = screen_size.y / 2 - window_height / 2;
+
+	RECT player_rc, enemy_rc;
+	GetWindowRect(player_window, &player_rc);
+	GetWindowRect(player_window, &enemy_rc);
+
+	POINT en_client_coordinates{ enemy_rc.left, enemy_rc.top };
+	POINT pl_client_coordinates{ player_rc.left, player_rc.top };
+
+	ScreenToClient(main_window, &pl_client_coordinates);
+	ScreenToClient(main_window, &en_client_coordinates);
+
+	float x_scalling_factor = (float)window_width / (float)prev_window_width;
+	float y_scalling_factor = (float)window_height / (float)prev_window_height;
+
+	//int pl_new_x = (pl_client_coordinates.x * x_scalling_factor);
+	int en_new_x = (en_client_coordinates.x * x_scalling_factor);
+	MoveWindow(main_window, x, y, window_width, window_height, true);
+	MoveWindow(player_window, window_width / 2 - player_width / 2, window_height - window_height / 4 - player_height, player_width, player_height, true); // rounding errors based on scalling factor
+	MoveWindow(enemy_window, en_new_x, window_height / 6, enemy_width, enemy_height, true); // rescales the x position based on the factor
+	
+	//For moving bullets properly
+	GetWindowRect(player_window, &player_rc);
+	POINT client_coordinates{ player_rc.left, player_rc.top };
+	ScreenToClient(main_window, &client_coordinates);
+
+	int bullet_x = client_coordinates.x + player_width / 2 - bullet_width / 2;
+	for (auto& bullet : bullets)
+	{
+		bullet.x = bullet_x;
+		bullet.y = bullet.y * y_scalling_factor;
+		MoveWindow(bullet.bullet_window, bullet.x, bullet.y, bullet_width, bullet_height, true);
+	}
+}
+
+
 app::~app()
 {
 	DeleteObject(player_brush);
 	DeleteObject(enemy_brush);
 	KillTimer(main_window, 1);
 }
+
+
+//int i = 0;
+	//for(auto & bullet : bullets)
+	//{
+	//	bullet.y -= 15;
+
+	//	if (bullet.y + bullet_height <= 0)
+	//	{
+	//		DestroyWindow(bullet.bullet_window);
+	//		bullets.erase(bullets.begin() + i); // retrives the iterator and removes the bullet from the position i from the vector
+	//		//i--; // because all of the values are shifted
+	//	}
+	//	else
+	//		MoveWindow(bullet.bullet_window, bullet.x, bullet.y, bullet_width, bullet_height, true);
+
+	//	i++;
+	//}
+
+//PAINTSTRUCT.rcPaint: The PAINTSTRUCT structure, passed to the BeginPaint function, contains a rectangle(rcPaint) that represents the area that needs to be repainted.You can use this rectangle to restrict your drawing to the invalidated area.If you don’t restrict the painting to this area, the entire window will be redrawn, which is not necessary.

@@ -41,15 +41,24 @@ private:
 	void create_bullets();
 	void move_bullets();
 	void on_command(WORD id);
+	void reset_game();
+	void resize_window(float factor); // small -> half of the dimension size; medium -> default size; large -> twice the default_size
 
-	static constexpr int window_width = 800;
-	static constexpr int window_height = 600;
+	static int enemy_window_direction; // 1 signs - right; 0 - signs left
+
+	static constexpr int default_window_width = 800;
+	static constexpr int default_window_height = 600;
 	static constexpr int bullet_width = 5;
 	static constexpr int bullet_height = 15;
 	static constexpr int enemy_width = 50;
 	static constexpr int enemy_height = 40;
 	static constexpr int player_width = 50;
 	static constexpr int player_height = 50;
+
+	int window_width = default_window_width;
+	int window_height = default_window_height;
+
+	int score = 0;
 
 public:
 	app(HINSTANCE instance);
