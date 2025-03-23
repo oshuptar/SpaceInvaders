@@ -16,9 +16,6 @@ player_brush{CreateSolidBrush(RGB(255, 0, 0))}
 	DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_BORDER | WS_CLIPCHILDREN;
 	DWORD ex_style = WS_EX_LAYERED | WS_EX_TOPMOST;
 
-	/*DWORD enemy_style = WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS;
-	DWORD player_style = WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS;*/
-
 	register_class();
 	main_window = create_window(style, ex_style);
 	enemy_window = create_child_window(enemy_width, enemy_height, window_width/2 - enemy_width/2, window_height/6);
@@ -50,8 +47,7 @@ int app::run(int show_window)
 {
 	SetTimer(main_window,1, 50, nullptr);
 	ShowWindow(main_window, show_window);
-	/*ShowWindow(player_window, SW_SHOWNA);
-	ShowWindow(enemy_window, SW_SHOWNA);*/
+
 	MSG msg{};
 	BOOL result = false;
 	HACCEL shortcuts = LoadAcceleratorsW(app_instance, MAKEINTRESOURCEW(ID_SHORTCUTS));
@@ -210,15 +206,28 @@ void app::create_bullets()
 
 void app::move_bullets()
 {
+	RECT bullet_rc, enemy_rc, result_rc;
 	for (int i = 0; i < bullets.size(); i++)
 	{
 		bullets[i].y -= 15;
+
+		GetWindowRect(bullets[i].bullet_window, &bullet_rc);
+		GetWindowRect(enemy_window, &enemy_rc);
 
 		if (bullets[i].y + bullet_height <= 0)
 		{
 			DestroyWindow(bullets[i].bullet_window);
 			bullets.erase(bullets.begin() + i); // retrives the iterator and removes the bullet from the position i from the vector
 			i--; // because all of the values are shifted
+		}
+		else if (IntersectRect(&result_rc, &bullet_rc, &enemy_rc) != 0)
+		{
+			score++;
+			DestroyWindow(bullets[i].bullet_window);
+			bullets.erase(bullets.begin() + i);
+			i--;
+
+			InvalidateRect(main_window, nullptr, false);
 		}
 		else
 			MoveWindow(bullets[i].bullet_window, bullets[i].x, bullets[i].y, bullet_width, bullet_height, true);
@@ -238,13 +247,13 @@ void app::on_command(WORD id)
 		reset_game();
 		break;
 	case ID_SMALL_SIZE:
-		resize_window(0.5);
+		resize_window(0.8);
 		break;
 	case ID_MEDIUM_SIZE:
 		resize_window(1);
 		break;
 	case ID_LARGE_SIZE:
-		resize_window(1.5);
+		resize_window(1.2);
 		break;
 	}
 }
@@ -277,14 +286,8 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 	case WM_PAINT:
 		// Implement more throughouly
 		dc = BeginPaint(window, &ps);
-		RECT paintArea = ps.rcPaint; // we restrict painting only to the specific area
-		brush = CreateSolidBrush(RGB(255, 255, 255));
-		FillRect(dc, &paintArea, brush);
-
 		scoreText = L"Score: " + std::to_wstring(score);
 		TextOutW(dc, 10, 10, scoreText.c_str(), scoreText.length());
-
-		DeleteObject(brush);
 		EndPaint(window, &ps);
 		return 0;
 
@@ -331,6 +334,7 @@ void app::reset_game()
 	MoveWindow(player_window, window_width / 2 - player_width / 2, window_height - window_height / 4 - player_height, player_width, player_height, true);
 	MoveWindow(enemy_window, window_width / 2 - enemy_width / 2, window_height / 6, enemy_width, enemy_height, true);
 	enemy_window_direction = 1;
+	score = 0;
 }
 
 
@@ -365,8 +369,12 @@ void app::resize_window(float factor)
 
 	//int pl_new_x = (pl_client_coordinates.x * x_scalling_factor);
 	int en_new_x = (en_client_coordinates.x * x_scalling_factor);
+
+	int pl_new_x = pl_client_coordinates.x * x_scalling_factor;
+	int pl_new_y = pl_client_coordinates.y * y_scalling_factor;
+
 	MoveWindow(main_window, x, y, window_width, window_height, true);
-	MoveWindow(player_window, window_width / 2 - player_width / 2, window_height - window_height / 4 - player_height, player_width, player_height, true); // rounding errors based on scalling factor
+	MoveWindow(player_window, pl_new_x , pl_new_y, player_width, player_height, true); // rounding errors based on scalling factor
 	MoveWindow(enemy_window, en_new_x, window_height / 6, enemy_width, enemy_height, true); // rescales the x position based on the factor
 	
 	//For moving bullets properly
@@ -382,6 +390,7 @@ void app::resize_window(float factor)
 		MoveWindow(bullet.bullet_window, bullet.x, bullet.y, bullet_width, bullet_height, true);
 	}
 }
+
 
 
 app::~app()
@@ -409,4 +418,5 @@ app::~app()
 	//	i++;
 	//}
 
-//PAINTSTRUCT.rcPaint: The PAINTSTRUCT structure, passed to the BeginPaint function, contains a rectangle(rcPaint) that represents the area that needs to be repainted.You can use this rectangle to restrict your drawing to the invalidated area.If you don’t restrict the painting to this area, the entire window will be redrawn, which is not necessary.
+//PAINTSTRUCT.rcPaint: The PAINTSTRUCT structure, passed to the BeginPaint function, contains a rectangle(rcPaint) that represents the area that needs to be repainted
+// .You can use this rectangle to restrict your drawing to the invalidated area.If you don’t restrict the painting to this area, the entire window will be redrawn, which is not necessary.
