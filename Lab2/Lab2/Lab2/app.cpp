@@ -158,40 +158,40 @@ void app::move_player_window(int direction)
 {
 	//1 is for right; 0 for left
 	RECT player_rc;
+	RECT main_rc;
 	POINT new_pos;
+	GetWindowRect(player_window, &player_rc);
 
-		if (direction == 1) {
-			GetWindowRect(player_window, &player_rc);
+	new_pos.x = player_rc.left;
+	new_pos.y = player_rc.top;
 
-			new_pos.x = player_rc.left + 10;
-			new_pos.y = player_rc.top;
+	ScreenToClient(main_window, &new_pos); // converts creen coordinated relative to the window
 
-			ScreenToClient(main_window, &new_pos); // converts creen coordinated relative to the window
+	if (direction == 1) {
+		new_pos.x = new_pos.x + 10;
 
-			if (new_pos.x + player_width < window_width - 10 - 10) // What is the problem here??
-			{
-				MoveWindow(player_window, new_pos.x, new_pos.y,
+		GetClientRect(main_window, &main_rc);
+
+		if (new_pos.x + player_width < main_rc.right - main_rc.left - 10) // What is the problem here??
+		{
+			MoveWindow(player_window, new_pos.x, new_pos.y,
 					player_width,
 					player_height,
 					true); //last parameter is responsible for repainting
-			}
 		}
-		else if (direction == 0) {
-			GetWindowRect(player_window, &player_rc);
+	}
+	else if (direction == 0) {
 
-			new_pos.x = player_rc.left - 10;
-			new_pos.y = player_rc.top;
+		new_pos.x = new_pos.x - 10;
 
-			ScreenToClient(main_window, &new_pos); // converts creen coordinated relative to the window
-
-			if (new_pos.x > 10)
-			{
-				MoveWindow(player_window, new_pos.x, new_pos.y,
+		if (new_pos.x > 10)
+		{
+			MoveWindow(player_window, new_pos.x, new_pos.y,
 					player_width,
 					player_height,
 					true); //last parameter is responsible for repainting
-			}
 		}
+	}
 }
 
 void app::create_bullets()
@@ -251,7 +251,7 @@ void app::on_command(WORD id)
 
 LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {  
-	std::wstring scoreText;
+	std::wstring scoreText; // initialisation bypasses case label fix
 	PAINTSTRUCT ps;
 	HBRUSH brush;
 	HDC dc;
@@ -275,6 +275,7 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 		move_bullets();
 		return 0;
 	case WM_PAINT:
+		// Implement more throughouly
 		dc = BeginPaint(window, &ps);
 		RECT paintArea = ps.rcPaint; // we restrict painting only to the specific area
 		brush = CreateSolidBrush(RGB(255, 255, 255));
