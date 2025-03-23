@@ -139,6 +139,8 @@
     <ResourceCompile Include="Resource.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="..\..\..\..\InvaderSprite.bmp" />
+    <Image Include="..\..\..\..\ShipSprite.bmp" />
     <Image Include="bitmap1.bmp" />
     <Image Include="icon1.ico" />
   </ItemGroup>

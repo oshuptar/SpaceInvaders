@@ -22,8 +22,12 @@ private:
 	std::vector<bullet> bullets;
 	HWND main_window, enemy_window, player_window;
 	HBRUSH enemy_brush, player_brush;
+	HBRUSH background_brush;
 	POINT screen_size;
 	HINSTANCE app_instance;
+
+	HBITMAP plane_bitmap;
+	HBITMAP enemy_bitmap;
 
 	bool register_class();
 	HWND create_window(DWORD style, DWORD ex_style, HWND parent = nullptr);
@@ -43,6 +47,13 @@ private:
 	void on_command(WORD id);
 	void reset_game();
 	void resize_window(float factor); // small -> half of the dimension size; medium -> default size; large -> twice the default_size
+
+	void render_plane_sprites(HDC dc);
+	void render_enemy_sprites(HDC dc);
+	void checkbox_handle(WORD id);
+	void choose_background_color_dialog();
+	void choose_background_color_file();
+	void set_background_color(COLORREF color);
 
 	static int enemy_window_direction; // 1 signs - right; 0 - signs left
 

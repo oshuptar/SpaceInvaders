@@ -1,6 +1,7 @@
 #include "app.h"
 #include <stdexcept>
 #include "resource.h"
+#include <commdlg.h> 
 
 //By default, Alt + F4 works on your window because the Windows operating system sends a WM_CLOSE message when the user presses Alt + F4.Your window automatically processes this message unless you override it.
 
@@ -11,9 +12,12 @@ int app::enemy_window_direction = 1;
 app::app(HINSTANCE instance) : app_instance{ instance }, main_window{},
 screen_size{GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)},
 enemy_brush{CreateSolidBrush(RGB(70,70,255))},
-player_brush{CreateSolidBrush(RGB(255, 0, 0))}
+player_brush{ CreateSolidBrush(RGB(255, 0, 0)) },
+background_brush{CreateSolidBrush(RGB(255, 255, 255))},
+plane_bitmap{LoadBitmapW(app_instance, MAKEINTRESOURCEW(ID_PLANE_BITMAP))},
+enemy_bitmap{LoadBitmapW(app_instance, MAKEINTRESOURCEW(ID_ENEMIES_BITMAP))}
 {
-	DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_BORDER | WS_CLIPCHILDREN;
+	DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_BORDER | WS_CLIPCHILDREN ;
 	DWORD ex_style = WS_EX_LAYERED | WS_EX_TOPMOST;
 
 	register_class();
@@ -22,6 +26,8 @@ player_brush{CreateSolidBrush(RGB(255, 0, 0))}
 	player_window = create_child_window(player_width, player_height, window_width/2 - player_width/2 , window_height - window_height / 4 - player_height);
 
 	SetLayeredWindowAttributes(main_window, 0, 255, LWA_ALPHA);
+	SetLayeredWindowAttributes(player_window, RGB(0, 0, 0), 0, LWA_ALPHA);
+	SetLayeredWindowAttributes(enemy_window, RGB(0, 0, 0), 0, LWA_ALPHA);
 }
 
 bool app::register_class()
@@ -32,7 +38,7 @@ bool app::register_class()
 
 	desc.cbSize = sizeof(WNDCLASSEXW);
 	desc.cbWndExtra = sizeof(LONG_PTR);
-	desc.hbrBackground = CreateSolidBrush(RGB(255, 255, 255));
+	desc.hbrBackground = background_brush;
 	desc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
 	desc.hInstance = app_instance;
 	desc.lpfnWndProc = static_window_proc;
@@ -50,6 +56,15 @@ int app::run(int show_window)
 
 	MSG msg{};
 	BOOL result = false;
+	HMENU menu = GetMenu(main_window);
+	MENUINFO menu_info;
+
+	GetMenuInfo(menu, &menu_info);
+
+	menu_info.fMask |= MIM_STYLE;
+	menu_info.dwStyle |= MNS_AUTODISMISS | MNS_CHECKORBMP;
+	SetMenuInfo(menu, &menu_info);
+
 	HACCEL shortcuts = LoadAcceleratorsW(app_instance, MAKEINTRESOURCEW(ID_SHORTCUTS));
 	while ((result = GetMessageW(&msg, nullptr, 0, 0)) != 0)
 	{
@@ -81,7 +96,7 @@ HWND app::create_window(DWORD style, DWORD ex_style, HWND parent)
 		window_center.x, window_center.y,
 		window_width, window_height,
 		parent,
-		nullptr,
+		LoadMenuW(app_instance, MAKEINTRESOURCEW(ID_MENU)),
 		app_instance,
 		this);
 
@@ -90,7 +105,8 @@ HWND app::create_window(DWORD style, DWORD ex_style, HWND parent)
 
 HWND app::create_child_window(int width, int height,int x, int y)
 {
-	return CreateWindowExW(0,
+	return CreateWindowExW(
+		0,
 		L"STATIC",
 		nullptr,
 		WS_CHILD | WS_CLIPSIBLINGS | WS_VISIBLE,
@@ -255,7 +271,55 @@ void app::on_command(WORD id)
 	case ID_LARGE_SIZE:
 		resize_window(1.2);
 		break;
+	default:
+		checkbox_handle(id);
+		break;
 	}
+}
+
+void app::checkbox_handle(WORD id)
+{
+	HMENU menu = GetMenu(main_window);
+	//UINT mask = GetMenuState(menu, id, MF_BYCOMMAND); // to find by uId by identifier
+	//if ((mask & MF_CHECKED) != 0)
+	//	CheckMenuItem(menu, id, MF_BYCOMMAND | MF_UNCHECKED);
+	//else {
+		switch (id)
+		{
+		case ID_BACKGROUND_COLOR:
+			CheckMenuItem(menu, ID_BACKGROUND_IMAGE, MF_UNCHECKED);
+			choose_background_color_dialog();
+			break;
+		case ID_BACKGROUND_IMAGE:
+			CheckMenuItem(menu, ID_BACKGROUND_COLOR, MF_UNCHECKED);
+			choose_background_color_file();
+			break;
+
+		case ID_CENTER:
+			CheckMenuItem(menu, ID_FILL, MF_UNCHECKED);
+			CheckMenuItem(menu, ID_TILE, MF_UNCHECKED);
+			CheckMenuItem(menu, ID_FIT, MF_UNCHECKED);
+			//todo
+			break;
+		case ID_FILL:
+			CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
+			CheckMenuItem(menu, ID_TILE, MF_UNCHECKED);
+			CheckMenuItem(menu, ID_FIT, MF_UNCHECKED);
+			//todo
+			break;
+		case ID_TILE:
+			CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
+			CheckMenuItem(menu, ID_FILL, MF_UNCHECKED);
+			CheckMenuItem(menu, ID_FIT, MF_UNCHECKED);
+			break;
+		case ID_FIT:
+			CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
+			CheckMenuItem(menu, ID_TILE, MF_UNCHECKED);
+			CheckMenuItem(menu, ID_FILL, MF_UNCHECKED);
+			break;
+		}
+		CheckMenuItem(menu, id, MF_CHECKED);
+	DrawMenuBar(main_window);
 }
 
 LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
@@ -282,12 +346,20 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 	case WM_TIMER:
 		move_enemy_window();
 		move_bullets();
+		InvalidateRect(main_window, nullptr, TRUE); // Invalidates the whole client area
+		//InvalidateRect(player_window, nullptr, TRUE);
 		return 0;
 	case WM_PAINT:
 		// Implement more throughouly
 		dc = BeginPaint(window, &ps);
+
 		scoreText = L"Score: " + std::to_wstring(score);
+		FillRect(dc, &ps.rcPaint, background_brush);
 		TextOutW(dc, 10, 10, scoreText.c_str(), scoreText.length());
+
+		render_enemy_sprites(dc);
+		render_plane_sprites(dc);
+
 		EndPaint(window, &ps);
 		return 0;
 
@@ -319,8 +391,97 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 		else
 			return reinterpret_cast<INT_PTR>(CreateSolidBrush(RGB(0, 0, 0)));
 	default:
-		return DefWindowProc(window, message, wparam, lparam);
+ 		return DefWindowProc(window, message, wparam, lparam);
 	}
+}
+
+void app::choose_background_color_file()
+{
+
+}
+
+void app::choose_background_color_dialog()
+{
+	CHOOSECOLOR cc;
+	static COLORREF custColors[16] = { 0 };
+	cc.lStructSize = sizeof(cc);
+	cc.hwndOwner = main_window;
+	cc.lpCustColors = custColors;
+	cc.Flags = CC_FULLOPEN | CC_SOLIDCOLOR;
+	cc.rgbResult = RGB(255, 255, 255);
+	// IF user click teh OK button -return value is nonzero
+	if (ChooseColor(&cc))
+	{
+		set_background_color(cc.rgbResult);
+	}
+}
+
+void app::set_background_color(COLORREF color)
+{
+	if(background_brush != nullptr)
+		DeleteObject(background_brush);
+	background_brush = CreateSolidBrush(RGB(GetRValue(color), GetGValue(color), GetBValue(color)));
+
+	InvalidateRect(main_window, nullptr, TRUE);  
+	UpdateWindow(main_window); // immediate redraw  
+}
+
+
+
+void app::render_plane_sprites(HDC dc)
+{
+	static int current_frame = 0;
+	static const int no_of_frames = 3;
+
+	//HDC client_area = GetDC(main_window); //extracts the dra context for the client area
+	HDC memory_context = CreateCompatibleDC(dc);
+
+	SelectObject(memory_context, plane_bitmap);
+
+	int x = (current_frame % no_of_frames) * player_width;
+	int y = 0;
+
+	current_frame = (current_frame + 1) % no_of_frames;
+
+	RECT player_rc;
+
+	GetWindowRect(player_window, &player_rc);
+	POINT point{ player_rc.left, player_rc.top };
+
+	ScreenToClient(main_window, &point);
+
+	//BitBlt(dc, point.x, point.y, enemy_width, enemy_height, memory_context, x, y, SRCCOPY);
+	BitBlt(dc, 400, 400, player_width, player_height, memory_context, x, y, SRCCOPY);
+
+
+	DeleteDC(memory_context);
+}
+
+void app::render_enemy_sprites(HDC dc)
+{
+	static int current_frame = 0;
+	static const int no_of_frames = 4;
+
+	//HDC client_area = GetDC(main_window); //extracts the dra context for the client area
+	HDC memory_context = CreateCompatibleDC(dc);
+
+	SelectObject(memory_context, enemy_bitmap);
+
+	int x = (current_frame % no_of_frames) * enemy_width;
+	int y = 0;
+
+	current_frame = (current_frame + 1) % no_of_frames;
+
+	RECT enemy_rc;
+
+	GetWindowRect(enemy_window, &enemy_rc);
+	POINT point{ enemy_rc.left, enemy_rc.top };
+
+	ScreenToClient(main_window, &point);
+
+	BitBlt(dc,point.x,point.y, enemy_width, enemy_height, memory_context, x, y, SRCCOPY);
+
+	DeleteDC(memory_context);
 }
 
 void app::reset_game()
@@ -397,26 +558,10 @@ app::~app()
 {
 	DeleteObject(player_brush);
 	DeleteObject(enemy_brush);
+	DeleteObject(background_brush);
 	KillTimer(main_window, 1);
 }
 
-
-//int i = 0;
-	//for(auto & bullet : bullets)
-	//{
-	//	bullet.y -= 15;
-
-	//	if (bullet.y + bullet_height <= 0)
-	//	{
-	//		DestroyWindow(bullet.bullet_window);
-	//		bullets.erase(bullets.begin() + i); // retrives the iterator and removes the bullet from the position i from the vector
-	//		//i--; // because all of the values are shifted
-	//	}
-	//	else
-	//		MoveWindow(bullet.bullet_window, bullet.x, bullet.y, bullet_width, bullet_height, true);
-
-	//	i++;
-	//}
 
 //PAINTSTRUCT.rcPaint: The PAINTSTRUCT structure, passed to the BeginPaint function, contains a rectangle(rcPaint) that represents the area that needs to be repainted
 // .You can use this rectangle to restrict your drawing to the invalidated area.If you don’t restrict the painting to this area, the entire window will be redrawn, which is not necessary.
