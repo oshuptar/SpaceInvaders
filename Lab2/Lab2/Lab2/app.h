@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <string>
 #include <vector>
+#include <commdlg.h> 
 
 class bullet
 {
@@ -19,25 +20,52 @@ class app
 {
 private:
 	static std::wstring const s_class_name;
+	static std::wstring const s_enemy_class_name;
+	static std::wstring const s_player_class_name;
 	std::vector<bullet> bullets;
 	HWND main_window, enemy_window, player_window;
 	HBRUSH enemy_brush, player_brush;
 	HBRUSH background_brush;
+	HBRUSH bullet_brush;
+	HBITMAP background_bitmap;
 	POINT screen_size;
 	HINSTANCE app_instance;
+
+	bool is_bitmap_set;
+	bool is_filled;
+	bool is_centered;
+	bool is_tiled;
+	bool is_fit;
 
 	HBITMAP plane_bitmap;
 	HBITMAP enemy_bitmap;
 
 	bool register_class();
+	bool register_class_player();
+	bool register_class_enemy();
+
 	HWND create_window(DWORD style, DWORD ex_style, HWND parent = nullptr);
+	HWND create_window_other(DWORD style, DWORD ex_style, int x, int y, int width, int height, LPCWSTR class_name, HWND parent);
+
 
 	HWND create_child_window(int width, int height,int x, int y);
 
 	static LRESULT CALLBACK static_window_proc(HWND window, UINT message,
 		WPARAM wparam, LPARAM lparam);
 
+	static LRESULT CALLBACK static_window_proc_player(HWND window, UINT message,
+		WPARAM wparam, LPARAM lparam);
+
+	static LRESULT CALLBACK static_window_proc_enemy(HWND window, UINT message,
+		WPARAM wparam, LPARAM lparam);
+
 	LRESULT window_proc(HWND window, UINT message,
+		WPARAM wparam, LPARAM lparam);
+
+	LRESULT window_proc_enemy(HWND window, UINT message,
+		WPARAM wparam, LPARAM lparam);
+
+	LRESULT window_proc_player(HWND window, UINT message,
 		WPARAM wparam, LPARAM lparam);
 
 	void move_player_window(int direction);
@@ -55,7 +83,11 @@ private:
 	void choose_background_color_file();
 	void set_background_color(COLORREF color);
 	void set_background(LPWSTR file_name);
-	void update_score();
+	void fill_bitmap(HDC dc);
+	void center_bitmap(HDC dc);
+	void fit_bitmap(HDC dc);
+	void tile_bitmap(HDC dc);
+	void render_bitmap(HDC dc);
 
 	static int enemy_window_direction; // 1 signs - right; 0 - signs left
 

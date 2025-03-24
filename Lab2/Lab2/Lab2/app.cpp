@@ -1,11 +1,12 @@
 #include "app.h"
 #include <stdexcept>
 #include "resource.h"
-#include <commdlg.h> 
 
 //By default, Alt + F4 works on your window because the Windows operating system sends a WM_CLOSE message when the user presses Alt + F4.Your window automatically processes this message unless you override it.
 
 std::wstring const app::s_class_name = L"Space Invaders Window Class";
+std::wstring const app::s_enemy_class_name = L"Enemy";
+std::wstring const app::s_player_class_name = L"Player";
 
 int app::enemy_window_direction = 1;
 
@@ -14,6 +15,7 @@ screen_size{GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)},
 enemy_brush{CreateSolidBrush(RGB(70,70,255))},
 player_brush{ CreateSolidBrush(RGB(255, 0, 0)) },
 background_brush{CreateSolidBrush(RGB(255, 255, 255))},
+bullet_brush{ CreateSolidBrush(RGB(0, 0, 0)) },
 plane_bitmap{LoadBitmapW(app_instance, MAKEINTRESOURCEW(ID_PLANE_BITMAP))},
 enemy_bitmap{LoadBitmapW(app_instance, MAKEINTRESOURCEW(ID_ENEMIES_BITMAP))}
 {
@@ -21,13 +23,27 @@ enemy_bitmap{LoadBitmapW(app_instance, MAKEINTRESOURCEW(ID_ENEMIES_BITMAP))}
 	DWORD ex_style = WS_EX_LAYERED | WS_EX_TOPMOST;
 
 	register_class();
+	register_class_enemy();
+	register_class_player();
+
 	main_window = create_window(style, ex_style);
-	enemy_window = create_child_window(enemy_width, enemy_height, window_width/2 - enemy_width/2, window_height/6);
-	player_window = create_child_window(player_width, player_height, window_width/2 - player_width/2 , window_height - window_height / 4 - player_height);
+	/*enemy_window = create_child_window(enemy_width, enemy_height, window_width/2 - enemy_width/2, window_height/6);
+	player_window = create_child_window(player_width, player_height, window_width/2 - player_width/2 , window_height - window_height / 4 - player_height);*/
+	DWORD ex_style_other = 0;
+	DWORD style_other =  WS_CHILD | WS_CLIPSIBLINGS | WS_VISIBLE;
+
+	enemy_window = create_window_other(style_other,
+		ex_style_other, window_width / 2 - enemy_width / 2,
+		window_height / 6, enemy_width, enemy_height, s_enemy_class_name.c_str(),
+		main_window);
+	player_window = create_window_other(style_other,
+		ex_style_other, window_width / 2 - player_width / 2, 
+		window_height - window_height / 4 - player_height, player_width, player_height, 
+		s_player_class_name.c_str(),
+		main_window);
 
 	SetLayeredWindowAttributes(main_window, 0, 255, LWA_ALPHA);
-	SetLayeredWindowAttributes(player_window, RGB(0, 0, 0), 0, LWA_ALPHA);
-	SetLayeredWindowAttributes(enemy_window, RGB(0, 0, 0), 0, LWA_ALPHA);
+
 }
 
 bool app::register_class()
@@ -49,10 +65,53 @@ bool app::register_class()
 	return RegisterClassExW(&desc) != 0;
 }
 
+bool app::register_class_player()
+{
+	WNDCLASSEXW desc{};
+	if (GetClassInfoExW(app_instance, s_player_class_name.c_str(), &desc) != 0)
+		return true;
+
+	desc.cbSize = sizeof(WNDCLASSEXW);
+	desc.cbWndExtra = sizeof(LONG_PTR);
+	desc.hbrBackground = player_brush;
+	desc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+	desc.hInstance = app_instance;
+	desc.lpfnWndProc = static_window_proc_player;
+	desc.lpszClassName = s_player_class_name.c_str();
+	desc.lpszMenuName = nullptr;
+	desc.hIcon = nullptr;
+	desc.style = CS_HREDRAW | CS_VREDRAW;
+
+	return RegisterClassExW(&desc) != 0;
+}
+
+bool app::register_class_enemy()
+{
+	WNDCLASSEXW desc{};
+	if (GetClassInfoExW(app_instance, s_enemy_class_name.c_str(), &desc) != 0)
+		return true;
+
+	desc.cbSize = sizeof(WNDCLASSEXW);
+	desc.cbWndExtra = sizeof(LONG_PTR);
+	desc.hbrBackground = enemy_brush;
+	desc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+	desc.hInstance = app_instance;
+	desc.lpfnWndProc = static_window_proc_enemy;
+	desc.lpszClassName = s_enemy_class_name.c_str();
+	desc.lpszMenuName = nullptr;
+	desc.hIcon = nullptr;
+	desc.style = CS_HREDRAW | CS_VREDRAW;
+
+	return RegisterClassExW(&desc) != 0;
+}
+
+
 int app::run(int show_window)
 {
 	SetTimer(main_window,1, 50, nullptr);
 	ShowWindow(main_window, show_window);
+	ShowWindow(player_window, SW_SHOWNA);
+	ShowWindow(enemy_window, SW_SHOWNA);
 
 	MSG msg{};
 	BOOL result = false;
@@ -77,6 +136,24 @@ int app::run(int show_window)
 			DispatchMessage(&msg);
 		}
 	}
+}
+
+HWND app::create_window_other(DWORD style, DWORD ex_style, int x, int y, int width, int height, LPCWSTR class_name ,HWND parent)
+{
+	
+	HWND window = CreateWindowExW(
+		ex_style,
+		class_name,
+		nullptr,
+		style,
+		x, y,
+		width, height,
+		parent,
+		nullptr,
+		app_instance,
+		this);
+
+	return window;
 }
 
 
@@ -137,6 +214,90 @@ LRESULT app::static_window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 		return my_app->window_proc(window, message, wparam, lparam);
 	}
 	return DefWindowProcW(window, message, wparam, lparam);
+}
+
+LRESULT app::static_window_proc_player(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+{
+	app* my_app = nullptr;
+	if (message == WM_NCCREATE) {
+		auto p = reinterpret_cast<LPCREATESTRUCTW>(lparam);
+		my_app = static_cast<app*>(p->lpCreateParams);
+		SetWindowLongPtrW(window, GWLP_USERDATA,
+			reinterpret_cast<LONG_PTR>(my_app));
+	}
+	else
+	{
+		my_app = reinterpret_cast<app*>(GetWindowLongPtrW(window, GWLP_USERDATA));
+	}
+	if (my_app != nullptr)
+	{
+		return my_app->window_proc_player(window, message, wparam, lparam);
+	}
+	return DefWindowProcW(window, message, wparam, lparam);
+}
+
+LRESULT app::static_window_proc_enemy(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+{
+	app* my_app = nullptr;
+	if (message == WM_NCCREATE) {
+		auto p = reinterpret_cast<LPCREATESTRUCTW>(lparam);
+		my_app = static_cast<app*>(p->lpCreateParams);
+		SetWindowLongPtrW(window, GWLP_USERDATA,
+			reinterpret_cast<LONG_PTR>(my_app));
+	}
+	else
+	{
+		my_app = reinterpret_cast<app*>(GetWindowLongPtrW(window, GWLP_USERDATA));
+	}
+	if (my_app != nullptr)
+	{
+		return my_app->window_proc_enemy(window, message, wparam, lparam);
+	}
+	return DefWindowProcW(window, message, wparam, lparam);
+}
+
+LRESULT app::window_proc_player(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+{
+	HDC dc;
+	PAINTSTRUCT ps;
+	switch (message)
+	{
+	case WM_CLOSE:
+		DestroyWindow(window);
+		return 0;
+	case WM_DESTROY:
+		PostQuitMessage(0);
+		return 0;
+	case WM_PAINT:
+		dc = BeginPaint(window, &ps);;
+		render_plane_sprites(dc);
+		EndPaint(window, &ps);
+		return 0;
+	default:
+		return DefWindowProc(window, message, wparam, lparam);
+	}
+}
+
+LRESULT app::window_proc_enemy(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+{
+	HDC dc;
+	PAINTSTRUCT ps;
+	switch (message)
+	{
+	case WM_CLOSE:
+		DestroyWindow(window);
+		return 0;
+	case WM_DESTROY:
+		PostQuitMessage(0);
+		return 0;
+	case WM_PAINT:
+		dc = BeginPaint(window, &ps);;
+		render_enemy_sprites(dc);
+		EndPaint(window, &ps);
+		return 0;
+	default:
+		return DefWindowProc(window, message, wparam, lparam);
+	}
 }
 
 void app::move_enemy_window()
@@ -204,6 +365,8 @@ void app::move_player_window(int direction)
 					true); //last parameter is responsible for repainting
 		}
 	}
+
+	InvalidateRect(main_window, NULL, false);
 }
 
 void app::create_bullets()
@@ -299,23 +462,42 @@ void app::checkbox_handle(WORD id)
 			CheckMenuItem(menu, ID_FILL, MF_UNCHECKED);
 			CheckMenuItem(menu, ID_TILE, MF_UNCHECKED);
 			CheckMenuItem(menu, ID_FIT, MF_UNCHECKED);
-			//todo
+			is_centered = true;
+			is_tiled = false;
+			is_filled = false;
+			is_fit = false;
+			InvalidateRect(main_window, nullptr, false);
 			break;
 		case ID_FILL:
 			CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
 			CheckMenuItem(menu, ID_TILE, MF_UNCHECKED);
 			CheckMenuItem(menu, ID_FIT, MF_UNCHECKED);
+			is_centered = true;
+			is_tiled = false;
+			is_filled = true;
+			is_fit = false;
+			InvalidateRect(main_window, nullptr, false);
 			//todo
 			break;
 		case ID_TILE:
 			CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
 			CheckMenuItem(menu, ID_FILL, MF_UNCHECKED);
 			CheckMenuItem(menu, ID_FIT, MF_UNCHECKED);
+			is_centered = true;
+			is_tiled = true;
+			is_filled = false;
+			is_fit = false;
+			InvalidateRect(main_window, nullptr, false);
 			break;
 		case ID_FIT:
 			CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
 			CheckMenuItem(menu, ID_TILE, MF_UNCHECKED);
 			CheckMenuItem(menu, ID_FILL, MF_UNCHECKED);
+			is_centered = true;
+			is_tiled = false;
+			is_filled = false;
+			is_fit = true;
+			InvalidateRect(main_window, nullptr, false);
 			break;
 		}
 		CheckMenuItem(menu, id, MF_CHECKED);
@@ -346,21 +528,32 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 	case WM_TIMER:
 		move_enemy_window();
 		move_bullets();
-		InvalidateRect(main_window, nullptr, TRUE); // Invalidates the whole client area
-		//InvalidateRect(player_window, nullptr, TRUE);
+		InvalidateRect(player_window, nullptr, true);
+		InvalidateRect(enemy_window, nullptr, true);
 		return 0;
 	case WM_PAINT:
 		// Implement more throughouly
 		dc = BeginPaint(window, &ps);
 
 		// Set the background mode to transparent to match the window's background
-		SetBkMode(dc, TRANSPARENT);
 
+		if (is_bitmap_set)
+		{
+			if (is_filled)
+				fill_bitmap(dc);
+			else if (is_fit)
+				fit_bitmap(dc);
+			else if (is_centered)
+				center_bitmap(dc);
+			else if (is_tiled)
+				tile_bitmap(dc);
+			else
+				render_bitmap(dc);
+		}
+		// Sets background transparent
+		SetBkMode(dc, TRANSPARENT);
 		score_text = L"Score: " + std::to_wstring(score);
 		TextOutW(dc, 10, 10, score_text.c_str(), score_text.length());
-
-		render_enemy_sprites(dc);
-		render_plane_sprites(dc);
 
 		EndPaint(window, &ps);
 		return 0;
@@ -384,23 +577,12 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 		on_command(LOWORD(wparam));// the lower 16 bits of the DWORD wparam contains the identifier for the command
 		return 0;
 	case WM_CTLCOLORSTATIC:
-		HWND hwndStatic;
-		hwndStatic = reinterpret_cast<HWND>(lparam);
-		if (hwndStatic == enemy_window)
-			return reinterpret_cast<INT_PTR>(enemy_brush);
-		else if (hwndStatic == player_window)
-			return reinterpret_cast<INT_PTR>(player_brush);
-		else
-			return reinterpret_cast<INT_PTR>(CreateSolidBrush(RGB(0, 0, 0)));
+		return reinterpret_cast<INT_PTR>(bullet_brush);
 	default:
  		return DefWindowProc(window, message, wparam, lparam);
 	}
 }
 
-void app::update_score()
-{
-
-}
 
 void app::choose_background_color_file()
 {
@@ -423,7 +605,7 @@ void app::choose_background_color_file()
 	ofn.Flags = OFN_CREATEPROMPT | OFN_ENABLESIZING | OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 	if (GetOpenFileName(&ofn))
 	{
-
+		set_background(ofn.lpstrFile);
 	}
 }
 
@@ -447,9 +629,11 @@ void app::set_background_color(COLORREF color)
 {
 	if(background_brush != nullptr)
 		DeleteObject(background_brush);
+
 	background_brush = CreateSolidBrush(RGB(GetRValue(color), GetGValue(color), GetBValue(color)));
 
 	SetClassLongPtr(main_window, GCLP_HBRBACKGROUND, (LONG_PTR)background_brush); // sets background color
+	is_bitmap_set = false;
 
 	InvalidateRect(main_window, nullptr, TRUE);  
 	UpdateWindow(main_window); // immediate redraw  
@@ -457,9 +641,72 @@ void app::set_background_color(COLORREF color)
 
 void app::set_background(LPWSTR file_name)
 {
-	//HIMAGE image = LoadImageW(app_instance, file_name, )
+	HBITMAP bitmap = (HBITMAP)LoadImageW(nullptr, file_name, IMAGE_BITMAP, 0 , 0, LR_LOADFROMFILE | LR_DEFAULTSIZE);
+	background_bitmap = bitmap;
+	is_bitmap_set = true;
+	InvalidateRect(main_window, nullptr, false);
 }
 
+void app::render_bitmap(HDC dc)
+{
+	HDC memory_context = CreateCompatibleDC(dc);
+	HBITMAP old_bitmap = (HBITMAP)SelectObject(memory_context, background_bitmap);
+	BitBlt(dc, 0, 0, window_width, window_height, memory_context, 0, 0, SRCCOPY);
+	SelectObject(dc, old_bitmap);
+	DeleteDC(memory_context);
+}
+
+void app::center_bitmap(HDC dc)
+{
+	HDC memory_context = CreateCompatibleDC(dc);
+	HBITMAP old_bitmap = nullptr;
+	RECT main_rc;
+	BITMAP bitmap_info;
+	if (background_bitmap != nullptr) {
+		old_bitmap = (HBITMAP)SelectObject(memory_context, background_bitmap);
+		GetClientRect(main_window, &main_rc);
+		int width = main_rc.right - main_rc.left;
+		int height = main_rc.bottom - main_rc.top;
+		GetObject(background_bitmap, sizeof(BITMAP), &bitmap_info);
+			BitBlt(dc, 0, 0, window_width, window_height, 
+				memory_context, 
+				width/2 - bitmap_info.bmWidth/2, height/2 - bitmap_info.bmHeight/2,
+				SRCCOPY);
+		SelectObject(dc, old_bitmap);
+	}
+
+	DeleteDC(memory_context);
+}
+
+void app::fill_bitmap(HDC dc)
+{
+	HDC memory_context = CreateCompatibleDC(dc);
+	HBITMAP old_bitmap = nullptr;
+	BITMAP bitmap_info;
+
+	//BITMAP structure extracts the info about the bitmap
+	if (background_bitmap != nullptr) {
+		old_bitmap = (HBITMAP)SelectObject(memory_context, background_bitmap);
+		GetObject(background_bitmap, sizeof(BITMAP), &bitmap_info);
+		StretchBlt(dc, 0, 0, window_width, window_height, memory_context, 0, 0,
+			bitmap_info.bmWidth, bitmap_info.bmHeight, SRCCOPY);
+	}
+
+	if (old_bitmap != nullptr)
+		SelectObject(dc, old_bitmap);
+
+	DeleteDC(memory_context);
+}
+
+void app::fit_bitmap(HDC dc)
+{
+
+}
+
+void app::tile_bitmap(HDC dc)
+{
+
+}
 
 
 void app::render_plane_sprites(HDC dc)
@@ -467,7 +714,6 @@ void app::render_plane_sprites(HDC dc)
 	static int current_frame = 0;
 	static const int no_of_frames = 3;
 
-	//HDC client_area = GetDC(main_window); //extracts the dra context for the client area
 	HDC memory_context = CreateCompatibleDC(dc);
 
 	SelectObject(memory_context, plane_bitmap);
@@ -477,15 +723,10 @@ void app::render_plane_sprites(HDC dc)
 
 	current_frame = (current_frame + 1) % no_of_frames;
 
-	RECT player_rc;
-
-	GetWindowRect(player_window, &player_rc);
-	POINT point{ player_rc.left, player_rc.top };
-
-	ScreenToClient(main_window, &point);
-
-	//BitBlt(dc, point.x, point.y, enemy_width, enemy_height, memory_context, x, y, SRCCOPY);
-	BitBlt(dc, 400, 400, player_width, player_height, memory_context, x, y, SRCCOPY);
+	BitBlt(dc, 0, 0, player_width, player_height, memory_context, x, y, SRCCOPY);
+	
+	GdiTransparentBlt(dc, 0, 0, player_width, player_height, memory_context, x, y, 50, 50, RGB(255, 0, 255));
+	//BitBlt(dc, 400, 400, player_width, player_height, memory_context, x, y, SRCCOPY);
 
 
 	DeleteDC(memory_context);
@@ -506,14 +747,16 @@ void app::render_enemy_sprites(HDC dc)
 
 	current_frame = (current_frame + 1) % no_of_frames;
 
-	RECT enemy_rc;
+	//BLENDFUNCTION blendFunc;
+	//blendFunc.BlendOp = AC_SRC_OVER;
+	//blendFunc.BlendFlags = 0;
+	//blendFunc.SourceConstantAlpha = 0; // Full opacity
+	//blendFunc.AlphaFormat = AC_SRC_ALPHA; // Use per-pixel alpha
 
-	GetWindowRect(enemy_window, &enemy_rc);
-	POINT point{ enemy_rc.left, enemy_rc.top };
+	//AlphaBlend(dc, 0, 0, enemy_width, enemy_height, memory_context, x, y, 50, 40, blendFunc);
 
-	ScreenToClient(main_window, &point);
-
-	BitBlt(dc,point.x,point.y, enemy_width, enemy_height, memory_context, x, y, SRCCOPY);
+	GdiTransparentBlt(dc, 0, 0, enemy_width, enemy_height, memory_context, x, y, 50, 40, RGB(255, 0, 255));
+	//BitBlt(dc,0,0, enemy_width, enemy_height, memory_context, x, y, SRCCOPY);
 
 	DeleteDC(memory_context);
 }
@@ -529,6 +772,9 @@ void app::reset_game()
 	MoveWindow(main_window, screen_size.x / 2 - window_width / 2, screen_size.y / 2 - window_height / 2, window_width, window_height, true);
 	MoveWindow(player_window, window_width / 2 - player_width / 2, window_height - window_height / 4 - player_height, player_width, player_height, true);
 	MoveWindow(enemy_window, window_width / 2 - enemy_width / 2, window_height / 6, enemy_width, enemy_height, true);
+	InvalidateRect(main_window, nullptr, false);
+	InvalidateRect(enemy_window, nullptr, false);
+	InvalidateRect(player_window, nullptr, false);
 	enemy_window_direction = 1;
 	score = 0;
 }
@@ -551,12 +797,12 @@ void app::resize_window(float factor)
 }
 
 
-
 app::~app()
 {
 	DeleteObject(player_brush);
 	DeleteObject(enemy_brush);
 	DeleteObject(background_brush);
+	DeleteObject(bullet_brush);
 	KillTimer(main_window, 1);
 }
 
@@ -602,3 +848,11 @@ app::~app()
 	//	bullet.y = bullet.y * y_scalling_factor;
 	//	MoveWindow(bullet.bullet_window, bullet.x, bullet.y, bullet_width, bullet_height, true);
 	//}
+
+/*HWND hwndStatic;
+		hwndStatic = reinterpret_cast<HWND>(lparam);
+		if (hwndStatic == enemy_window)
+			return reinterpret_cast<INT_PTR>(enemy_brush);
+		else if (hwndStatic == player_window)
+			return reinterpret_cast<INT_PTR>(player_brush);
+		else*/
