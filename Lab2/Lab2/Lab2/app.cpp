@@ -711,7 +711,39 @@ void app::fill_bitmap(HDC dc)
 
 void app::fit_bitmap(HDC dc)
 {
+	// we need o match the dimensions of the image, so that it would not be distorted
+	// prone to rounding errors
+	HDC memory_context = CreateCompatibleDC(dc);
+	HBITMAP old_bitmap = nullptr;
+	BITMAP bitmap_info;
+	RECT main_rc;
 
+	if (background_bitmap != nullptr) {
+		old_bitmap = (HBITMAP)SelectObject(memory_context, background_bitmap);
+		GetObject(background_bitmap, sizeof(BITMAP), &bitmap_info);
+
+		GetClientRect(main_window, &main_rc);
+		int width = main_rc.right - main_rc.left;
+		int height = main_rc.bottom - main_rc.top;
+
+		float factor_x = (float) width / (float) bitmap_info.bmWidth;
+		float factor_y = (float) height / (float) bitmap_info.bmHeight;
+
+		float factor = factor_x > factor_y ? factor_y : factor_x;
+
+		int new_width = bitmap_info.bmWidth * factor;
+		int new_height = bitmap_info.bmHeight * factor;
+
+		int x_indent = width / 2 - new_width / 2;
+		int y_indent = height / 2 - new_height / 2;
+
+		StretchBlt(dc, x_indent, y_indent, new_width, new_height, memory_context, 0, 0,
+			bitmap_info.bmWidth, bitmap_info.bmHeight, SRCCOPY);
+
+		SelectObject(dc, old_bitmap);
+	}
+		
+	DeleteDC(memory_context);
 }
 
 // memory_context prevents flickering it uses double-buffering
