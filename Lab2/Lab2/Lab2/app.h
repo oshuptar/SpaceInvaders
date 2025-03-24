@@ -36,6 +36,7 @@ private:
 	bool is_centered;
 	bool is_tiled;
 	bool is_fit;
+	//bool is_redraw_background;
 
 	HBITMAP plane_bitmap;
 	HBITMAP enemy_bitmap;
@@ -68,6 +69,7 @@ private:
 	LRESULT window_proc_player(HWND window, UINT message,
 		WPARAM wparam, LPARAM lparam);
 
+	void redraw_background();
 	void move_player_window(int direction);
 	void move_enemy_window();
 	void create_bullets();

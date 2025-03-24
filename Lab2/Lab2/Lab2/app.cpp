@@ -325,6 +325,8 @@ void app::move_enemy_window()
 	int width = enemy_rc.right - enemy_rc.left;
 	int height = enemy_rc.bottom - enemy_rc.top;
 	MoveWindow(enemy_window, client_area_coordinates.x, client_area_coordinates.y, width, height, true);
+
+	InvalidateRect(main_window, nullptr, false);
 }
 
 void app::move_player_window(int direction)
@@ -405,11 +407,12 @@ void app::move_bullets()
 			DestroyWindow(bullets[i].bullet_window);
 			bullets.erase(bullets.begin() + i);
 			i--;
-
-			InvalidateRect(main_window, nullptr, false);
+			
+			InvalidateRect(main_window, nullptr, false); // fix this
 		}
 		else
 			MoveWindow(bullets[i].bullet_window, bullets[i].x, bullets[i].y, bullet_width, bullet_height, true);
+
 	}
 }
 
@@ -443,10 +446,6 @@ void app::on_command(WORD id)
 void app::checkbox_handle(WORD id)
 {
 	HMENU menu = GetMenu(main_window);
-	//UINT mask = GetMenuState(menu, id, MF_BYCOMMAND); // to find by uId by identifier
-	//if ((mask & MF_CHECKED) != 0)
-	//	CheckMenuItem(menu, id, MF_BYCOMMAND | MF_UNCHECKED);
-	//else {
 		switch (id)
 		{
 		case ID_BACKGROUND_COLOR:
@@ -472,7 +471,7 @@ void app::checkbox_handle(WORD id)
 			CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
 			CheckMenuItem(menu, ID_TILE, MF_UNCHECKED);
 			CheckMenuItem(menu, ID_FIT, MF_UNCHECKED);
-			is_centered = true;
+			is_centered = false;
 			is_tiled = false;
 			is_filled = true;
 			is_fit = false;
@@ -483,8 +482,8 @@ void app::checkbox_handle(WORD id)
 			CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
 			CheckMenuItem(menu, ID_FILL, MF_UNCHECKED);
 			CheckMenuItem(menu, ID_FIT, MF_UNCHECKED);
-			is_centered = true;
 			is_tiled = true;
+			is_centered = false;
 			is_filled = false;
 			is_fit = false;
 			InvalidateRect(main_window, nullptr, false);
@@ -493,7 +492,7 @@ void app::checkbox_handle(WORD id)
 			CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
 			CheckMenuItem(menu, ID_TILE, MF_UNCHECKED);
 			CheckMenuItem(menu, ID_FILL, MF_UNCHECKED);
-			is_centered = true;
+			is_centered = false;
 			is_tiled = false;
 			is_filled = false;
 			is_fit = true;
@@ -509,7 +508,8 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 	std::wstring score_text; // initialisation bypasses case label fix
 	PAINTSTRUCT ps;
 	HBRUSH brush;
-	HDC dc;
+	HDC dc, memory_context;
+	HBITMAP bitmap, old_bitmap;
 
 	switch (message)
 	{
@@ -535,8 +535,6 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 		// Implement more throughouly
 		dc = BeginPaint(window, &ps);
 
-		// Set the background mode to transparent to match the window's background
-
 		if (is_bitmap_set)
 		{
 			if (is_filled)
@@ -551,10 +549,20 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 				render_bitmap(dc);
 		}
 		// Sets background transparent
-		SetBkMode(dc, TRANSPARENT);
-		score_text = L"Score: " + std::to_wstring(score);
-		TextOutW(dc, 10, 10, score_text.c_str(), score_text.length());
+		/*memory_context = CreateCompatibleDC(dc);
+		bitmap = CreateCompatibleBitmap(dc, window_width, window_height);
+		old_bitmap = (HBITMAP)SelectObject(memory_context, bitmap);*/
 
+		SetBkMode(dc, TRANSPARENT);
+
+		score_text = L"Score: " + std::to_wstring(score);
+		TextOutW(dc, 20, 20, score_text.c_str(), score_text.length());
+
+		//BitBlt(dc, 10, 10, window_width, window_height , memory_context, 0, 0, SRCCOPY);
+
+		//SelectObject(memory_context, old_bitmap);
+		//DeleteObject(bitmap);
+		//DeleteDC(memory_context);
 		EndPaint(window, &ps);
 		return 0;
 
@@ -635,6 +643,8 @@ void app::set_background_color(COLORREF color)
 	SetClassLongPtr(main_window, GCLP_HBRBACKGROUND, (LONG_PTR)background_brush); // sets background color
 	is_bitmap_set = false;
 
+	//redraw_background();
+
 	InvalidateRect(main_window, nullptr, TRUE);  
 	UpdateWindow(main_window); // immediate redraw  
 }
@@ -668,9 +678,10 @@ void app::center_bitmap(HDC dc)
 		int width = main_rc.right - main_rc.left;
 		int height = main_rc.bottom - main_rc.top;
 		GetObject(background_bitmap, sizeof(BITMAP), &bitmap_info);
-			BitBlt(dc, 0, 0, window_width, window_height, 
+			BitBlt(dc, width / 2 - bitmap_info.bmWidth / 2,
+				height / 2 - bitmap_info.bmHeight / 2, window_width, window_height,
 				memory_context, 
-				width/2 - bitmap_info.bmWidth/2, height/2 - bitmap_info.bmHeight/2,
+				0, 0,
 				SRCCOPY);
 		SelectObject(dc, old_bitmap);
 	}
@@ -703,9 +714,49 @@ void app::fit_bitmap(HDC dc)
 
 }
 
+// memory_context prevents flickering it uses double-buffering
 void app::tile_bitmap(HDC dc)
 {
+	HDC memory_context = CreateCompatibleDC(dc); // acts as an offscreen buffer
+	HDC memory_context_output = CreateCompatibleDC(dc);
 
+	HBITMAP memory_bitmap = CreateCompatibleBitmap(dc, window_width, window_height);
+	SelectObject(memory_context_output, memory_bitmap);
+
+	HBITMAP old_bitmap = nullptr;
+	BITMAP bitmap_info;
+	RECT main_rc;
+
+	if (background_bitmap != nullptr) {
+		old_bitmap = (HBITMAP)SelectObject(memory_context, background_bitmap);
+		GetObject(background_bitmap, sizeof(BITMAP), &bitmap_info);
+
+		GetClientRect(main_window, &main_rc);
+		int width = main_rc.right - main_rc.left;
+		int height = main_rc.bottom - main_rc.top;
+
+		for (int x = 0; x < width; x += bitmap_info.bmWidth)
+			for (int y = 0; y < height; y += bitmap_info.bmHeight)
+				BitBlt(memory_context_output, x, y, bitmap_info.bmWidth, bitmap_info.bmHeight,
+					memory_context, 0, 0, SRCCOPY);
+
+		BitBlt(dc, 0, 0, window_width, window_height, memory_context_output, 0, 0, SRCCOPY);
+		SelectObject(dc, old_bitmap);
+	}
+
+	DeleteObject(memory_bitmap);
+	DeleteDC(memory_context_output);
+	DeleteDC(memory_context);
+}
+
+void app::redraw_background()
+{
+	HDC dc = GetDC(main_window);
+	RECT main_rc;
+	GetClientRect(main_window,&main_rc);
+	FillRect(dc, &main_rc, background_brush);
+	//is_redraw_background = false;
+	ReleaseDC(main_window, dc);
 }
 
 
@@ -772,9 +823,12 @@ void app::reset_game()
 	MoveWindow(main_window, screen_size.x / 2 - window_width / 2, screen_size.y / 2 - window_height / 2, window_width, window_height, true);
 	MoveWindow(player_window, window_width / 2 - player_width / 2, window_height - window_height / 4 - player_height, player_width, player_height, true);
 	MoveWindow(enemy_window, window_width / 2 - enemy_width / 2, window_height / 6, enemy_width, enemy_height, true);
-	InvalidateRect(main_window, nullptr, false);
-	InvalidateRect(enemy_window, nullptr, false);
-	InvalidateRect(player_window, nullptr, false);
+
+	//is_redraw_background = true;
+
+	InvalidateRect(enemy_window, nullptr, true);
+	InvalidateRect(player_window, nullptr, true);
+	InvalidateRect(main_window, nullptr, true);
 	enemy_window_direction = 1;
 	score = 0;
 }
@@ -804,6 +858,8 @@ app::~app()
 	DeleteObject(background_brush);
 	DeleteObject(bullet_brush);
 	KillTimer(main_window, 1);
+	if (background_bitmap != nullptr)
+		DeleteObject(background_bitmap);
 }
 
 
