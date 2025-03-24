@@ -324,7 +324,7 @@ void app::checkbox_handle(WORD id)
 
 LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {  
-	std::wstring scoreText; // initialisation bypasses case label fix
+	std::wstring score_text; // initialisation bypasses case label fix
 	PAINTSTRUCT ps;
 	HBRUSH brush;
 	HDC dc;
@@ -353,9 +353,11 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 		// Implement more throughouly
 		dc = BeginPaint(window, &ps);
 
-		scoreText = L"Score: " + std::to_wstring(score);
-		FillRect(dc, &ps.rcPaint, background_brush);
-		TextOutW(dc, 10, 10, scoreText.c_str(), scoreText.length());
+		// Set the background mode to transparent to match the window's background
+		SetBkMode(dc, TRANSPARENT);
+
+		score_text = L"Score: " + std::to_wstring(score);
+		TextOutW(dc, 10, 10, score_text.c_str(), score_text.length());
 
 		render_enemy_sprites(dc);
 		render_plane_sprites(dc);
@@ -395,9 +397,34 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 	}
 }
 
-void app::choose_background_color_file()
+void app::update_score()
 {
 
+}
+
+void app::choose_background_color_file()
+{
+	wchar_t file_name[100];
+	OPENFILENAME ofn;
+	ZeroMemory(&ofn, sizeof(ofn));
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = main_window;
+	ofn.hInstance = app_instance;
+	ofn.lpstrFilter = NULL;
+	ofn.lpstrCustomFilter = NULL;
+	ofn.nFilterIndex = 0;
+	ofn.lpstrFile = file_name;
+	ZeroMemory(ofn.lpstrFile, 100 * sizeof(wchar_t));
+	ofn.lpstrFile[0] = L'\0';
+	ofn.nMaxFile = sizeof(file_name);
+	ofn.lpstrFileTitle = NULL;
+	ofn.lpstrInitialDir = L"C:\\";
+	ofn.lpstrTitle = NULL;
+	ofn.Flags = OFN_CREATEPROMPT | OFN_ENABLESIZING | OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+	if (GetOpenFileName(&ofn))
+	{
+
+	}
 }
 
 void app::choose_background_color_dialog()
@@ -422,8 +449,15 @@ void app::set_background_color(COLORREF color)
 		DeleteObject(background_brush);
 	background_brush = CreateSolidBrush(RGB(GetRValue(color), GetGValue(color), GetBValue(color)));
 
+	SetClassLongPtr(main_window, GCLP_HBRBACKGROUND, (LONG_PTR)background_brush); // sets background color
+
 	InvalidateRect(main_window, nullptr, TRUE);  
 	UpdateWindow(main_window); // immediate redraw  
+}
+
+void app::set_background(LPWSTR file_name)
+{
+	//HIMAGE image = LoadImageW(app_instance, file_name, )
 }
 
 
@@ -492,6 +526,7 @@ void app::reset_game()
 	}
 	bullets.clear();
 
+	MoveWindow(main_window, screen_size.x / 2 - window_width / 2, screen_size.y / 2 - window_height / 2, window_width, window_height, true);
 	MoveWindow(player_window, window_width / 2 - player_width / 2, window_height - window_height / 4 - player_height, player_width, player_height, true);
 	MoveWindow(enemy_window, window_width / 2 - enemy_width / 2, window_height / 6, enemy_width, enemy_height, true);
 	enemy_window_direction = 1;
@@ -512,44 +547,7 @@ void app::resize_window(float factor)
 	window_width = default_window_width * factor;
 	window_height = default_window_height * factor;
 
-	int x = screen_size.x / 2 - window_width / 2;
-	int y = screen_size.y / 2 - window_height / 2;
-
-	RECT player_rc, enemy_rc;
-	GetWindowRect(player_window, &player_rc);
-	GetWindowRect(player_window, &enemy_rc);
-
-	POINT en_client_coordinates{ enemy_rc.left, enemy_rc.top };
-	POINT pl_client_coordinates{ player_rc.left, player_rc.top };
-
-	ScreenToClient(main_window, &pl_client_coordinates);
-	ScreenToClient(main_window, &en_client_coordinates);
-
-	float x_scalling_factor = (float)window_width / (float)prev_window_width;
-	float y_scalling_factor = (float)window_height / (float)prev_window_height;
-
-	//int pl_new_x = (pl_client_coordinates.x * x_scalling_factor);
-	int en_new_x = (en_client_coordinates.x * x_scalling_factor);
-
-	int pl_new_x = pl_client_coordinates.x * x_scalling_factor;
-	int pl_new_y = pl_client_coordinates.y * y_scalling_factor;
-
-	MoveWindow(main_window, x, y, window_width, window_height, true);
-	MoveWindow(player_window, pl_new_x , pl_new_y, player_width, player_height, true); // rounding errors based on scalling factor
-	MoveWindow(enemy_window, en_new_x, window_height / 6, enemy_width, enemy_height, true); // rescales the x position based on the factor
-	
-	//For moving bullets properly
-	GetWindowRect(player_window, &player_rc);
-	POINT client_coordinates{ player_rc.left, player_rc.top };
-	ScreenToClient(main_window, &client_coordinates);
-
-	int bullet_x = client_coordinates.x + player_width / 2 - bullet_width / 2;
-	for (auto& bullet : bullets)
-	{
-		bullet.x = bullet_x;
-		bullet.y = bullet.y * y_scalling_factor;
-		MoveWindow(bullet.bullet_window, bullet.x, bullet.y, bullet_width, bullet_height, true);
-	}
+	reset_game();
 }
 
 
@@ -565,3 +563,42 @@ app::~app()
 
 //PAINTSTRUCT.rcPaint: The PAINTSTRUCT structure, passed to the BeginPaint function, contains a rectangle(rcPaint) that represents the area that needs to be repainted
 // .You can use this rectangle to restrict your drawing to the invalidated area.If you don’t restrict the painting to this area, the entire window will be redrawn, which is not necessary.
+
+//int x = screen_size.x / 2 - window_width / 2;
+	//int y = screen_size.y / 2 - window_height / 2;
+
+	//RECT player_rc, enemy_rc;
+	//GetWindowRect(player_window, &player_rc);
+	//GetWindowRect(player_window, &enemy_rc);
+
+	//POINT en_client_coordinates{ enemy_rc.left, enemy_rc.top };
+	//POINT pl_client_coordinates{ player_rc.left, player_rc.top };
+
+	//ScreenToClient(main_window, &pl_client_coordinates);
+	//ScreenToClient(main_window, &en_client_coordinates);
+
+	//float x_scalling_factor = (float)window_width / (float)prev_window_width;
+	//float y_scalling_factor = (float)window_height / (float)prev_window_height;
+
+	////int pl_new_x = (pl_client_coordinates.x * x_scalling_factor);
+	//int en_new_x = (en_client_coordinates.x * x_scalling_factor);
+
+	//int pl_new_x = pl_client_coordinates.x * x_scalling_factor;
+	//int pl_new_y = pl_client_coordinates.y * y_scalling_factor;
+
+	//MoveWindow(main_window, x, y, window_width, window_height, true);
+	//MoveWindow(player_window, pl_new_x , pl_new_y, player_width, player_height, true); // rounding errors based on scalling factor
+	//MoveWindow(enemy_window, en_new_x, window_height / 6, enemy_width, enemy_height, true); // rescales the x position based on the factor
+	//
+	////For moving bullets properly
+	//GetWindowRect(player_window, &player_rc);
+	//POINT client_coordinates{ player_rc.left, player_rc.top };
+	//ScreenToClient(main_window, &client_coordinates);
+
+	//int bullet_x = client_coordinates.x + player_width / 2 - bullet_width / 2;
+	//for (auto& bullet : bullets)
+	//{
+	//	bullet.x = bullet_x;
+	//	bullet.y = bullet.y * y_scalling_factor;
+	//	MoveWindow(bullet.bullet_window, bullet.x, bullet.y, bullet_width, bullet_height, true);
+	//}

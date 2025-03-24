@@ -54,6 +54,8 @@ private:
 	void choose_background_color_dialog();
 	void choose_background_color_file();
 	void set_background_color(COLORREF color);
+	void set_background(LPWSTR file_name);
+	void update_score();
 
 	static int enemy_window_direction; // 1 signs - right; 0 - signs left
 
@@ -70,6 +72,7 @@ private:
 	int window_height = default_window_height;
 
 	int score = 0;
+	bool score_changed = false;
 
 public:
 	app(HINSTANCE instance);
