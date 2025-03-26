@@ -36,6 +36,7 @@ private:
 	bool is_centered;
 	bool is_tiled;
 	bool is_fit;
+	//bool is_score_updated;
 	//bool is_redraw_background;
 
 	HBITMAP plane_bitmap;
@@ -69,6 +70,7 @@ private:
 	LRESULT window_proc_player(HWND window, UINT message,
 		WPARAM wparam, LPARAM lparam);
 
+	void create_dialog_box();
 	void redraw_background();
 	void move_player_window(int direction);
 	void move_enemy_window();
@@ -90,6 +92,7 @@ private:
 	void fit_bitmap(HDC dc);
 	void tile_bitmap(HDC dc);
 	void render_bitmap(HDC dc);
+	void update_score();
 
 	static int enemy_window_direction; // 1 signs - right; 0 - signs left
 

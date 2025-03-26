@@ -8,6 +8,8 @@ std::wstring const app::s_class_name = L"Space Invaders Window Class";
 std::wstring const app::s_enemy_class_name = L"Enemy";
 std::wstring const app::s_player_class_name = L"Player";
 
+COLORREF color_to_exclude = RGB(255, 0, 255);
+
 int app::enemy_window_direction = 1;
 
 app::app(HINSTANCE instance) : app_instance{ instance }, main_window{},
@@ -19,7 +21,7 @@ bullet_brush{ CreateSolidBrush(RGB(0, 0, 0)) },
 plane_bitmap{LoadBitmapW(app_instance, MAKEINTRESOURCEW(ID_PLANE_BITMAP))},
 enemy_bitmap{LoadBitmapW(app_instance, MAKEINTRESOURCEW(ID_ENEMIES_BITMAP))}
 {
-	DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_BORDER | WS_CLIPCHILDREN ;
+	DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_BORDER;// | WS_CLIPCHILDREN;
 	DWORD ex_style = WS_EX_LAYERED | WS_EX_TOPMOST;
 
 	register_class();
@@ -30,7 +32,7 @@ enemy_bitmap{LoadBitmapW(app_instance, MAKEINTRESOURCEW(ID_ENEMIES_BITMAP))}
 	/*enemy_window = create_child_window(enemy_width, enemy_height, window_width/2 - enemy_width/2, window_height/6);
 	player_window = create_child_window(player_width, player_height, window_width/2 - player_width/2 , window_height - window_height / 4 - player_height);*/
 	DWORD ex_style_other = 0;
-	DWORD style_other =  WS_CHILD | WS_CLIPSIBLINGS | WS_VISIBLE;
+	DWORD style_other = WS_CHILD | WS_CLIPSIBLINGS | WS_VISIBLE;// | SS_BITMAP;
 
 	enemy_window = create_window_other(style_other,
 		ex_style_other, window_width / 2 - enemy_width / 2,
@@ -80,7 +82,7 @@ bool app::register_class_player()
 	desc.lpszClassName = s_player_class_name.c_str();
 	desc.lpszMenuName = nullptr;
 	desc.hIcon = nullptr;
-	desc.style = CS_HREDRAW | CS_VREDRAW;
+	//desc.style = CS_HREDRAW | CS_VREDRAW;
 
 	return RegisterClassExW(&desc) != 0;
 }
@@ -93,14 +95,14 @@ bool app::register_class_enemy()
 
 	desc.cbSize = sizeof(WNDCLASSEXW);
 	desc.cbWndExtra = sizeof(LONG_PTR);
-	desc.hbrBackground = enemy_brush;
+	desc.hbrBackground = nullptr;//enemy_brush;
 	desc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
 	desc.hInstance = app_instance;
 	desc.lpfnWndProc = static_window_proc_enemy;
 	desc.lpszClassName = s_enemy_class_name.c_str();
 	desc.lpszMenuName = nullptr;
 	desc.hIcon = nullptr;
-	desc.style = CS_HREDRAW | CS_VREDRAW;
+	//desc.style = CS_HREDRAW | CS_VREDRAW;
 
 	return RegisterClassExW(&desc) != 0;
 }
@@ -268,6 +270,8 @@ LRESULT app::window_proc_player(HWND window, UINT message, WPARAM wparam, LPARAM
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		return 0;
+	case WM_ERASEBKGND:
+		return 0;
 	case WM_PAINT:
 		dc = BeginPaint(window, &ps);;
 		render_plane_sprites(dc);
@@ -289,6 +293,8 @@ LRESULT app::window_proc_enemy(HWND window, UINT message, WPARAM wparam, LPARAM 
 		return 0;
 	case WM_DESTROY:
 		PostQuitMessage(0);
+		return 0;
+	case WM_ERASEBKGND:
 		return 0;
 	case WM_PAINT:
 		dc = BeginPaint(window, &ps);;
@@ -326,7 +332,9 @@ void app::move_enemy_window()
 	int height = enemy_rc.bottom - enemy_rc.top;
 	MoveWindow(enemy_window, client_area_coordinates.x, client_area_coordinates.y, width, height, true);
 
-	InvalidateRect(main_window, nullptr, false);
+	GetClientRect(enemy_window,&enemy_rc);
+
+	//InvalidateRect(main_window, &enemy_rc , true);//changed from false to true
 }
 
 void app::move_player_window(int direction)
@@ -368,7 +376,19 @@ void app::move_player_window(int direction)
 		}
 	}
 
-	InvalidateRect(main_window, NULL, false);
+	InvalidateRect(main_window, nullptr, false); 
+}
+
+void app::update_score()
+{
+	std::wstring score_text; // initialisation bypasses case label fix
+	HDC dc = GetDC(main_window);
+	SetBkMode(dc, TRANSPARENT);
+
+	score_text = L"Score: " + std::to_wstring(score);
+	TextOutW(dc, 10, 10, score_text.c_str(), score_text.length());
+
+	ReleaseDC(main_window, dc);
 }
 
 void app::create_bullets()
@@ -407,8 +427,11 @@ void app::move_bullets()
 			DestroyWindow(bullets[i].bullet_window);
 			bullets.erase(bullets.begin() + i);
 			i--;
-			
+
+			RECT score_rect = { 10, 10, 50, 50 };  
+			InvalidateRect(main_window, &score_rect, true); // ensures that we erase the previous result
 			InvalidateRect(main_window, nullptr, false); // fix this
+			//update_score();
 		}
 		else
 			MoveWindow(bullets[i].bullet_window, bullets[i].x, bullets[i].y, bullet_width, bullet_height, true);
@@ -510,6 +533,10 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 	HBRUSH brush;
 	HDC dc, memory_context;
 	HBITMAP bitmap, old_bitmap;
+	HBITMAP output_bitmap;
+	HDC output_buffer;
+
+	RECT main_rc;
 
 	switch (message)
 	{
@@ -530,10 +557,18 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 		move_bullets();
 		InvalidateRect(player_window, nullptr, true);
 		InvalidateRect(enemy_window, nullptr, true);
+		InvalidateRect(main_window, nullptr, true);
 		return 0;
 	case WM_PAINT:
 		// Implement more throughouly
 		dc = BeginPaint(window, &ps);
+
+		GetClientRect(main_window, &main_rc);
+		output_buffer = CreateCompatibleDC(dc);
+		output_bitmap = CreateCompatibleBitmap(output_buffer, window_width, window_height);
+
+		old_bitmap = (HBITMAP)SelectObject(output_buffer, output_bitmap);
+		FillRect(output_buffer, &main_rc, background_brush);
 
 		if (is_bitmap_set)
 		{
@@ -553,16 +588,22 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 		bitmap = CreateCompatibleBitmap(dc, window_width, window_height);
 		old_bitmap = (HBITMAP)SelectObject(memory_context, bitmap);*/
 
+		//SetBkMode(output_buffer, TRANSPARENT);
+
 		SetBkMode(dc, TRANSPARENT);
 
 		score_text = L"Score: " + std::to_wstring(score);
-		TextOutW(dc, 20, 20, score_text.c_str(), score_text.length());
+		//TextOutW(output_buffer, 10, 10, score_text.c_str(), score_text.length());
 
-		//BitBlt(dc, 10, 10, window_width, window_height , memory_context, 0, 0, SRCCOPY);
+		TextOutW(dc, 10, 10, score_text.c_str(), score_text.length());
 
-		//SelectObject(memory_context, old_bitmap);
+		//BitBlt(dc, 0, 0, window_width, window_height ,output_buffer, 0, 0, SRCCOPY);
+
+		//SelectObject(output_buffer, old_bitmap);
 		//DeleteObject(bitmap);
 		//DeleteDC(memory_context);
+		//DeleteObject(output_bitmap);
+		DeleteDC(output_buffer);
 		EndPaint(window, &ps);
 		return 0;
 
@@ -645,8 +686,8 @@ void app::set_background_color(COLORREF color)
 
 	//redraw_background();
 
-	InvalidateRect(main_window, nullptr, TRUE);  
-	UpdateWindow(main_window); // immediate redraw  
+	InvalidateRect(main_window, nullptr, true);  
+	//UpdateWindow(main_window); // immediate redraw  
 }
 
 void app::set_background(LPWSTR file_name)
@@ -678,11 +719,21 @@ void app::center_bitmap(HDC dc)
 		int width = main_rc.right - main_rc.left;
 		int height = main_rc.bottom - main_rc.top;
 		GetObject(background_bitmap, sizeof(BITMAP), &bitmap_info);
+		if (bitmap_info.bmHeight < window_height && bitmap_info.bmWidth < window_width) {
 			BitBlt(dc, width / 2 - bitmap_info.bmWidth / 2,
 				height / 2 - bitmap_info.bmHeight / 2, window_width, window_height,
-				memory_context, 
+				memory_context,
 				0, 0,
 				SRCCOPY);
+		}
+		else
+		{
+			BitBlt(dc, 0,
+				0, window_width, window_height,
+				memory_context,
+				bitmap_info.bmWidth/2 - window_width/2, bitmap_info.bmHeight/2 - window_height/2,
+				SRCCOPY);
+		}
 		SelectObject(dc, old_bitmap);
 	}
 
@@ -791,6 +842,11 @@ void app::redraw_background()
 	ReleaseDC(main_window, dc);
 }
 
+void app::create_dialog_box()
+{
+	//DialogBoxW();
+}
+
 
 void app::render_plane_sprites(HDC dc)
 {
@@ -806,9 +862,11 @@ void app::render_plane_sprites(HDC dc)
 
 	current_frame = (current_frame + 1) % no_of_frames;
 
-	BitBlt(dc, 0, 0, player_width, player_height, memory_context, x, y, SRCCOPY);
+	//COLORREF color_to_exclude = GetPixel(memory_context, 0, 0); // extracts the color ofthe pixel
+
+	//BitBlt(dc, 0, 0, player_width, player_height, memory_context, x, y, SRCCOPY);
 	
-	GdiTransparentBlt(dc, 0, 0, player_width, player_height, memory_context, x, y, 50, 50, RGB(255, 0, 255));
+	TransparentBlt(dc, 0, 0, player_width, player_height, memory_context, x, y, 50, 50, color_to_exclude);
 	//BitBlt(dc, 400, 400, player_width, player_height, memory_context, x, y, SRCCOPY);
 
 
@@ -830,6 +888,7 @@ void app::render_enemy_sprites(HDC dc)
 
 	current_frame = (current_frame + 1) % no_of_frames;
 
+
 	//BLENDFUNCTION blendFunc;
 	//blendFunc.BlendOp = AC_SRC_OVER;
 	//blendFunc.BlendFlags = 0;
@@ -838,7 +897,7 @@ void app::render_enemy_sprites(HDC dc)
 
 	//AlphaBlend(dc, 0, 0, enemy_width, enemy_height, memory_context, x, y, 50, 40, blendFunc);
 
-	GdiTransparentBlt(dc, 0, 0, enemy_width, enemy_height, memory_context, x, y, 50, 40, RGB(255, 0, 255));
+	TransparentBlt(dc, 0, 0, enemy_width, enemy_height, memory_context, x, y, 50, 40, color_to_exclude);
 	//BitBlt(dc,0,0, enemy_width, enemy_height, memory_context, x, y, SRCCOPY);
 
 	DeleteDC(memory_context);
