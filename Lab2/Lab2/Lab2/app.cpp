@@ -1,12 +1,12 @@
 #include "app.h"
 #include <stdexcept>
 #include "resource.h"
-
 //By default, Alt + F4 works on your window because the Windows operating system sends a WM_CLOSE message when the user presses Alt + F4.Your window automatically processes this message unless you override it.
 
 std::wstring const app::s_class_name = L"Space Invaders Window Class";
 std::wstring const app::s_enemy_class_name = L"Enemy";
 std::wstring const app::s_player_class_name = L"Player";
+std::wstring const app::s_application_name = L"Space_Invaders_App";
 
 COLORREF color_to_exclude = RGB(255, 0, 255);
 
@@ -21,6 +21,8 @@ bullet_brush{ CreateSolidBrush(RGB(0, 0, 0)) },
 plane_bitmap{LoadBitmapW(app_instance, MAKEINTRESOURCEW(ID_PLANE_BITMAP))},
 enemy_bitmap{LoadBitmapW(app_instance, MAKEINTRESOURCEW(ID_ENEMIES_BITMAP))}
 {
+	load_configuration_routine();
+
 	DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_BORDER;// | WS_CLIPCHILDREN;
 	DWORD ex_style = WS_EX_LAYERED | WS_EX_TOPMOST;
 
@@ -158,7 +160,6 @@ HWND app::create_window(DWORD style, DWORD ex_style, HWND parent)
 		.x = (screen_size.x / 2) - (window_width / 2),
 		.y = (screen_size.y / 2) - (window_height / 2),
 	};
-
 	HWND window = CreateWindowExW(
 		ex_style,
 		s_class_name.c_str(),
@@ -187,7 +188,6 @@ HWND app::create_child_window(int width, int height,int x, int y)
 		nullptr,
 		app_instance,
 		nullptr);
-
 }
 
 LRESULT app::static_window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
@@ -466,6 +466,7 @@ void app::checkbox_handle(WORD id)
 				is_tiled = false;
 				is_filled = false;
 				is_fit = false;
+				file_display_mode = centered;
 				InvalidateRect(main_window, nullptr, false);
 				break;
 			case ID_FILL:
@@ -476,8 +477,8 @@ void app::checkbox_handle(WORD id)
 				is_tiled = false;
 				is_filled = true;
 				is_fit = false;
+				file_display_mode = filled;
 				InvalidateRect(main_window, nullptr, false);
-				//todo
 				break;
 			case ID_TILE:
 				CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
@@ -487,6 +488,7 @@ void app::checkbox_handle(WORD id)
 				is_centered = false;
 				is_filled = false;
 				is_fit = false;
+				file_display_mode = tiled;
 				InvalidateRect(main_window, nullptr, false);
 				break;
 			case ID_FIT:
@@ -497,6 +499,7 @@ void app::checkbox_handle(WORD id)
 				is_tiled = false;
 				is_filled = false;
 				is_fit = true;
+				file_display_mode = fit;
 				InvalidateRect(main_window, nullptr, false);
 				break;
 		}
@@ -517,6 +520,7 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 			DestroyWindow(window);
 			return 0;
 		case WM_DESTROY:
+			save_configuration_routine();
 			PostQuitMessage(0);
 			return 0;
 		case WM_SETFOCUS:
@@ -628,6 +632,7 @@ void app::set_background_color(COLORREF color)
 		DeleteObject(background_brush);
 
 	background_brush = CreateSolidBrush(RGB(GetRValue(color), GetGValue(color), GetBValue(color)));
+	background_color = RGB(GetRValue(color), GetGValue(color), GetBValue(color));
 
 	SetClassLongPtr(main_window, GCLP_HBRBACKGROUND, (LONG_PTR)background_brush); // sets background color
 	is_bitmap_set = false;
@@ -639,6 +644,7 @@ void app::set_background(LPWSTR file_name)
 {
 	HBITMAP bitmap = (HBITMAP)LoadImageW(nullptr, file_name, IMAGE_BITMAP, 0 , 0, LR_LOADFROMFILE | LR_DEFAULTSIZE);
 	background_bitmap = bitmap;
+	bitmap_file_path = file_name;
 	is_bitmap_set = true;
 	InvalidateRect(main_window, nullptr, false);
 }
@@ -808,6 +814,48 @@ void app::render_enemy_sprites(HDC dc)
 	current_frame = (current_frame + 1) % no_of_frames;
 	TransparentBlt(dc, 0, 0, enemy_width, enemy_height, memory_context, x, y, 50, 40, color_to_exclude);
 	DeleteDC(memory_context);
+}
+
+std::wstring convert_enum_to_string(file_display_mode file_display_mode)
+{
+	switch (file_display_mode)
+	{
+	case none:
+		return L"none";
+	case filled:
+		return L"filled";
+	case centered:
+		return L"centered";
+	case tiled:
+		return L"tiled";
+	case fit:
+		return L"fit";
+	}
+}
+
+void app::save_configuration_routine()
+{
+	stored_data += L"Width=" + std::to_wstring(window_width) + L'\0';
+	stored_data += L"Height=" + std::to_wstring(window_height) + L'\0';
+	stored_data += L"Score=" + std::to_wstring(score) + L'\0';
+	stored_data += L"DisplayMode=" + convert_enum_to_string(file_display_mode) + L'\0';
+	stored_data += L"Is_bitmap_set" + std::to_wstring(is_bitmap_set ? 1 : 0) + L'\0';
+	if (is_bitmap_set)
+	{
+		stored_data += L"DisplayFile=" + bitmap_file_path + L'\0';
+	}
+	stored_data += L"BackgroundColor=" + std::to_wstring(background_color) + L'\0'; // COLORREF is just a DWORD
+	stored_data += L'\0';
+	WriteProfileSectionW(s_application_name.c_str(), stored_data.c_str());
+}
+
+void app::load_configuration_routine()
+{
+	wchar_t buffer[1000];
+	DWORD result = GetProfileSectionW(s_application_name.c_str(), buffer, sizeof(buffer) / sizeof(wchar_t));
+	
+	window_width = std::stoi(buffer + 6);
+	window_height = std::stoi()
 }
 
 void app::reset_game()

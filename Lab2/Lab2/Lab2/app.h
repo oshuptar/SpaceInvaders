@@ -5,6 +5,7 @@
 #include <vector>
 #include <commdlg.h> 
 #include <chrono>
+#include <WinBase.h>
 
 class bullet
 {
@@ -17,12 +18,27 @@ public:
 	{}
 };
 
+enum file_display_mode
+{
+	none,
+	filled,
+	centered,
+	tiled,
+	fit,
+};
+
+enum display_mode
+{
+
+};
+
 class app
 {
 private:
 	static std::wstring const s_class_name;
 	static std::wstring const s_enemy_class_name;
 	static std::wstring const s_player_class_name;
+	static std::wstring const s_application_name;
 	std::vector<bullet> bullets;
 	HWND main_window, enemy_window, player_window;
 	HBRUSH enemy_brush, player_brush;
@@ -32,14 +48,18 @@ private:
 	POINT screen_size;
 	HINSTANCE app_instance;
 
+	COLORREF background_color = RGB(255, 255, 255);
+
+	file_display_mode file_display_mode;
+
 	bool is_bitmap_set;
 	bool is_filled;
 	bool is_centered;
 	bool is_tiled;
 	bool is_fit;
-	//bool is_score_updated;
-	//bool is_redraw_background;
-
+	
+	std::wstring bitmap_file_path;
+	std::wstring stored_data;
 	HBITMAP plane_bitmap;
 	HBITMAP enemy_bitmap;
 
@@ -49,8 +69,6 @@ private:
 
 	HWND create_window(DWORD style, DWORD ex_style, HWND parent = nullptr);
 	HWND create_window_other(DWORD style, DWORD ex_style, int x, int y, int width, int height, LPCWSTR class_name, HWND parent);
-
-
 	HWND create_child_window(int width, int height,int x, int y);
 
 	static LRESULT CALLBACK static_window_proc(HWND window, UINT message,
@@ -92,6 +110,8 @@ private:
 	void fit_bitmap(HDC dc);
 	void tile_bitmap(HDC dc);
 	void render_bitmap(HDC dc);
+	void save_configuration_routine();
+	void load_configuration_routine();
 
 	static int enemy_window_direction; // 1 signs - right; 0 - signs left
 
