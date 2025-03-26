@@ -393,6 +393,9 @@ void app::update_score()
 
 void app::create_bullets()
 {
+	if (std::chrono::system_clock::now() - last_bullet_time < std::chrono::milliseconds(150))
+		return;
+
 	RECT player_rc;
 	GetWindowRect(player_window, &player_rc);
 
@@ -403,6 +406,8 @@ void app::create_bullets()
 	int y = client_coordinates.y;
 	HWND bullet_window = create_child_window(bullet_width, bullet_height, x, y);
 	bullets.push_back(bullet(bullet_window, x, y));
+
+	last_bullet_time = std::chrono::system_clock::now();
 }
 
 void app::move_bullets()
@@ -583,12 +588,6 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 			else
 				render_bitmap(dc);
 		}
-		// Sets background transparent
-		/*memory_context = CreateCompatibleDC(dc);
-		bitmap = CreateCompatibleBitmap(dc, window_width, window_height);
-		old_bitmap = (HBITMAP)SelectObject(memory_context, bitmap);*/
-
-		//SetBkMode(output_buffer, TRANSPARENT);
 
 		SetBkMode(dc, TRANSPARENT);
 
@@ -597,12 +596,7 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 
 		TextOutW(dc, 10, 10, score_text.c_str(), score_text.length());
 
-		//BitBlt(dc, 0, 0, window_width, window_height ,output_buffer, 0, 0, SRCCOPY);
-
-		//SelectObject(output_buffer, old_bitmap);
-		//DeleteObject(bitmap);
-		//DeleteDC(memory_context);
-		//DeleteObject(output_bitmap);
+		DeleteObject(output_bitmap);
 		DeleteDC(output_buffer);
 		EndPaint(window, &ps);
 		return 0;
@@ -696,6 +690,8 @@ void app::set_background(LPWSTR file_name)
 	background_bitmap = bitmap;
 	is_bitmap_set = true;
 	InvalidateRect(main_window, nullptr, false);
+
+	//DeleteObject(bitmap);
 }
 
 void app::render_bitmap(HDC dc)
@@ -704,6 +700,7 @@ void app::render_bitmap(HDC dc)
 	HBITMAP old_bitmap = (HBITMAP)SelectObject(memory_context, background_bitmap);
 	BitBlt(dc, 0, 0, window_width, window_height, memory_context, 0, 0, SRCCOPY);
 	SelectObject(dc, old_bitmap);
+
 	DeleteDC(memory_context);
 }
 
@@ -1003,3 +1000,18 @@ app::~app()
 		else if (hwndStatic == player_window)
 			return reinterpret_cast<INT_PTR>(player_brush);
 		else*/
+
+
+		//BitBlt(dc, 0, 0, window_width, window_height ,output_buffer, 0, 0, SRCCOPY);
+
+				//SelectObject(output_buffer, old_bitmap);
+				//DeleteObject(bitmap);
+				//DeleteDC(memory_context);
+
+
+// Sets background transparent
+		/*memory_context = CreateCompatibleDC(dc);
+		bitmap = CreateCompatibleBitmap(dc, window_width, window_height);
+		old_bitmap = (HBITMAP)SelectObject(memory_context, bitmap);*/
+
+		//SetBkMode(output_buffer, TRANSPARENT);

@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <commdlg.h> 
+#include <chrono>
 
 class bullet
 {
@@ -107,6 +108,8 @@ private:
 
 	int window_width = default_window_width;
 	int window_height = default_window_height;
+
+	std::chrono::time_point<std::chrono::system_clock> last_bullet_time = std::chrono::system_clock::now();
 
 	int score = 0;
 	bool score_changed = false;
