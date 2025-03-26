@@ -71,7 +71,6 @@ private:
 	LRESULT window_proc_player(HWND window, UINT message,
 		WPARAM wparam, LPARAM lparam);
 
-	void create_dialog_box();
 	void redraw_background();
 	void move_player_window(int direction);
 	void move_enemy_window();
@@ -93,7 +92,6 @@ private:
 	void fit_bitmap(HDC dc);
 	void tile_bitmap(HDC dc);
 	void render_bitmap(HDC dc);
-	void update_score();
 
 	static int enemy_window_direction; // 1 signs - right; 0 - signs left
 
@@ -110,6 +108,7 @@ private:
 	int window_height = default_window_height;
 
 	std::chrono::time_point<std::chrono::system_clock> last_bullet_time = std::chrono::system_clock::now();
+	std::chrono::time_point<std::chrono::system_clock> last_movement_time = std::chrono::system_clock::now();
 
 	int score = 0;
 	bool score_changed = false;

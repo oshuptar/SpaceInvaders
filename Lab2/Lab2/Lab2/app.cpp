@@ -29,8 +29,6 @@ enemy_bitmap{LoadBitmapW(app_instance, MAKEINTRESOURCEW(ID_ENEMIES_BITMAP))}
 	register_class_player();
 
 	main_window = create_window(style, ex_style);
-	/*enemy_window = create_child_window(enemy_width, enemy_height, window_width/2 - enemy_width/2, window_height/6);
-	player_window = create_child_window(player_width, player_height, window_width/2 - player_width/2 , window_height - window_height / 4 - player_height);*/
 	DWORD ex_style_other = 0;
 	DWORD style_other = WS_CHILD | WS_CLIPSIBLINGS | WS_VISIBLE;// | SS_BITMAP;
 
@@ -107,13 +105,10 @@ bool app::register_class_enemy()
 	return RegisterClassExW(&desc) != 0;
 }
 
-
 int app::run(int show_window)
 {
-	SetTimer(main_window,1, 50, nullptr);
+	SetTimer(main_window,1, 60, nullptr);
 	ShowWindow(main_window, show_window);
-	ShowWindow(player_window, SW_SHOWNA);
-	ShowWindow(enemy_window, SW_SHOWNA);
 
 	MSG msg{};
 	BOOL result = false;
@@ -121,7 +116,6 @@ int app::run(int show_window)
 	MENUINFO menu_info;
 
 	GetMenuInfo(menu, &menu_info);
-
 	menu_info.fMask |= MIM_STYLE;
 	menu_info.dwStyle |= MNS_AUTODISMISS | MNS_CHECKORBMP;
 	SetMenuInfo(menu, &menu_info);
@@ -142,7 +136,6 @@ int app::run(int show_window)
 
 HWND app::create_window_other(DWORD style, DWORD ex_style, int x, int y, int width, int height, LPCWSTR class_name ,HWND parent)
 {
-	
 	HWND window = CreateWindowExW(
 		ex_style,
 		class_name,
@@ -157,7 +150,6 @@ HWND app::create_window_other(DWORD style, DWORD ex_style, int x, int y, int wid
 
 	return window;
 }
-
 
 HWND app::create_window(DWORD style, DWORD ex_style, HWND parent)
 {
@@ -333,15 +325,16 @@ void app::move_enemy_window()
 	MoveWindow(enemy_window, client_area_coordinates.x, client_area_coordinates.y, width, height, true);
 
 	GetClientRect(enemy_window,&enemy_rc);
-
 	//InvalidateRect(main_window, &enemy_rc , true);//changed from false to true
 }
 
 void app::move_player_window(int direction)
 {
 	//1 is for right; 0 for left
-	RECT player_rc;
-	RECT main_rc;
+	if (std::chrono::system_clock::now() - last_movement_time < std::chrono::milliseconds(25))
+		return;
+
+	RECT player_rc, main_rc;
 	POINT new_pos;
 	GetWindowRect(player_window, &player_rc);
 
@@ -352,7 +345,6 @@ void app::move_player_window(int direction)
 
 	if (direction == 1) {
 		new_pos.x = new_pos.x + 10;
-
 		GetClientRect(main_window, &main_rc);
 
 		if (new_pos.x + player_width < main_rc.right - main_rc.left - 10) // What is the problem here??
@@ -364,7 +356,6 @@ void app::move_player_window(int direction)
 		}
 	}
 	else if (direction == 0) {
-
 		new_pos.x = new_pos.x - 10;
 
 		if (new_pos.x > 10)
@@ -375,25 +366,13 @@ void app::move_player_window(int direction)
 					true); //last parameter is responsible for repainting
 		}
 	}
-
-	InvalidateRect(main_window, nullptr, false); 
-}
-
-void app::update_score()
-{
-	std::wstring score_text; // initialisation bypasses case label fix
-	HDC dc = GetDC(main_window);
-	SetBkMode(dc, TRANSPARENT);
-
-	score_text = L"Score: " + std::to_wstring(score);
-	TextOutW(dc, 10, 10, score_text.c_str(), score_text.length());
-
-	ReleaseDC(main_window, dc);
+	last_movement_time = std::chrono::system_clock::now();
+	//InvalidateRect(main_window, nullptr, false); 
 }
 
 void app::create_bullets()
 {
-	if (std::chrono::system_clock::now() - last_bullet_time < std::chrono::milliseconds(150))
+	if (std::chrono::system_clock::now() - last_bullet_time < std::chrono::milliseconds(100))
 		return;
 
 	RECT player_rc;
@@ -432,11 +411,6 @@ void app::move_bullets()
 			DestroyWindow(bullets[i].bullet_window);
 			bullets.erase(bullets.begin() + i);
 			i--;
-
-			RECT score_rect = { 10, 10, 50, 50 };  
-			InvalidateRect(main_window, &score_rect, true); // ensures that we erase the previous result
-			InvalidateRect(main_window, nullptr, false); // fix this
-			//update_score();
 		}
 		else
 			MoveWindow(bullets[i].bullet_window, bullets[i].x, bullets[i].y, bullet_width, bullet_height, true);
@@ -448,26 +422,26 @@ void app::on_command(WORD id)
 {
 	switch (id)
 	{
-	case ID_ABOUT:
-		break;
-	case ID_EXIT:
-		DestroyWindow(main_window);
-		break;
-	case ID_NEW_GAME:
-		reset_game();
-		break;
-	case ID_SMALL_SIZE:
-		resize_window(0.8);
-		break;
-	case ID_MEDIUM_SIZE:
-		resize_window(1);
-		break;
-	case ID_LARGE_SIZE:
-		resize_window(1.2);
-		break;
-	default:
-		checkbox_handle(id);
-		break;
+		case ID_ABOUT:
+			break;
+		case ID_EXIT:
+			DestroyWindow(main_window);
+			break;
+		case ID_NEW_GAME:
+			reset_game();
+			break;
+		case ID_SMALL_SIZE:
+			resize_window(0.8);
+			break;
+		case ID_MEDIUM_SIZE:
+			resize_window(1);
+			break;
+		case ID_LARGE_SIZE:
+			resize_window(1.2);
+			break;
+		default:
+			checkbox_handle(id);
+			break;
 	}
 }
 
@@ -476,56 +450,55 @@ void app::checkbox_handle(WORD id)
 	HMENU menu = GetMenu(main_window);
 		switch (id)
 		{
-		case ID_BACKGROUND_COLOR:
-			CheckMenuItem(menu, ID_BACKGROUND_IMAGE, MF_UNCHECKED);
-			choose_background_color_dialog();
-			break;
-		case ID_BACKGROUND_IMAGE:
-			CheckMenuItem(menu, ID_BACKGROUND_COLOR, MF_UNCHECKED);
-			choose_background_color_file();
-			break;
-
-		case ID_CENTER:
-			CheckMenuItem(menu, ID_FILL, MF_UNCHECKED);
-			CheckMenuItem(menu, ID_TILE, MF_UNCHECKED);
-			CheckMenuItem(menu, ID_FIT, MF_UNCHECKED);
-			is_centered = true;
-			is_tiled = false;
-			is_filled = false;
-			is_fit = false;
-			InvalidateRect(main_window, nullptr, false);
-			break;
-		case ID_FILL:
-			CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
-			CheckMenuItem(menu, ID_TILE, MF_UNCHECKED);
-			CheckMenuItem(menu, ID_FIT, MF_UNCHECKED);
-			is_centered = false;
-			is_tiled = false;
-			is_filled = true;
-			is_fit = false;
-			InvalidateRect(main_window, nullptr, false);
-			//todo
-			break;
-		case ID_TILE:
-			CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
-			CheckMenuItem(menu, ID_FILL, MF_UNCHECKED);
-			CheckMenuItem(menu, ID_FIT, MF_UNCHECKED);
-			is_tiled = true;
-			is_centered = false;
-			is_filled = false;
-			is_fit = false;
-			InvalidateRect(main_window, nullptr, false);
-			break;
-		case ID_FIT:
-			CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
-			CheckMenuItem(menu, ID_TILE, MF_UNCHECKED);
-			CheckMenuItem(menu, ID_FILL, MF_UNCHECKED);
-			is_centered = false;
-			is_tiled = false;
-			is_filled = false;
-			is_fit = true;
-			InvalidateRect(main_window, nullptr, false);
-			break;
+			case ID_BACKGROUND_COLOR:
+				CheckMenuItem(menu, ID_BACKGROUND_IMAGE, MF_UNCHECKED);
+				choose_background_color_dialog();
+				break;
+			case ID_BACKGROUND_IMAGE:
+				CheckMenuItem(menu, ID_BACKGROUND_COLOR, MF_UNCHECKED);
+				choose_background_color_file();
+				break;
+			case ID_CENTER:
+				CheckMenuItem(menu, ID_FILL, MF_UNCHECKED);
+				CheckMenuItem(menu, ID_TILE, MF_UNCHECKED);
+				CheckMenuItem(menu, ID_FIT, MF_UNCHECKED);
+				is_centered = true;
+				is_tiled = false;
+				is_filled = false;
+				is_fit = false;
+				InvalidateRect(main_window, nullptr, false);
+				break;
+			case ID_FILL:
+				CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
+				CheckMenuItem(menu, ID_TILE, MF_UNCHECKED);
+				CheckMenuItem(menu, ID_FIT, MF_UNCHECKED);
+				is_centered = false;
+				is_tiled = false;
+				is_filled = true;
+				is_fit = false;
+				InvalidateRect(main_window, nullptr, false);
+				//todo
+				break;
+			case ID_TILE:
+				CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
+				CheckMenuItem(menu, ID_FILL, MF_UNCHECKED);
+				CheckMenuItem(menu, ID_FIT, MF_UNCHECKED);
+				is_tiled = true;
+				is_centered = false;
+				is_filled = false;
+				is_fit = false;
+				InvalidateRect(main_window, nullptr, false);
+				break;
+			case ID_FIT:
+				CheckMenuItem(menu, ID_CENTER, MF_UNCHECKED);
+				CheckMenuItem(menu, ID_TILE, MF_UNCHECKED);
+				CheckMenuItem(menu, ID_FILL, MF_UNCHECKED);
+				is_centered = false;
+				is_tiled = false;
+				is_filled = false;
+				is_fit = true;
+				InvalidateRect(main_window, nullptr, false);
+				break;
 		}
 		CheckMenuItem(menu, id, MF_CHECKED);
 	DrawMenuBar(main_window);
@@ -535,97 +508,78 @@ LRESULT app::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam
 {  
 	std::wstring score_text; // initialisation bypasses case label fix
 	PAINTSTRUCT ps;
-	HBRUSH brush;
-	HDC dc, memory_context;
-	HBITMAP bitmap, old_bitmap;
-	HBITMAP output_bitmap;
-	HDC output_buffer;
-
+	HDC dc, output_buffer;
+	HBITMAP bitmap, old_bitmap, output_bitmap;
 	RECT main_rc;
-
 	switch (message)
 	{
-	case WM_CLOSE:
-		DestroyWindow(window);
-		return 0;
-	case WM_DESTROY:
-		PostQuitMessage(0);
-		return 0;
-	case WM_SETFOCUS:
-		SetLayeredWindowAttributes(main_window, 0, 255, LWA_ALPHA);
-		return DefWindowProc(window, message, wparam, lparam);
-	case WM_KILLFOCUS:
-		SetLayeredWindowAttributes(main_window, 0, 255 * 0.4 , LWA_ALPHA);
-		return DefWindowProc(window, message, wparam, lparam);
-	case WM_TIMER:
-		move_enemy_window();
-		move_bullets();
-		InvalidateRect(player_window, nullptr, true);
-		InvalidateRect(enemy_window, nullptr, true);
-		InvalidateRect(main_window, nullptr, true);
-		return 0;
-	case WM_PAINT:
-		// Implement more throughouly
-		dc = BeginPaint(window, &ps);
+		case WM_CLOSE:
+			DestroyWindow(window);
+			return 0;
+		case WM_DESTROY:
+			PostQuitMessage(0);
+			return 0;
+		case WM_SETFOCUS:
+			SetLayeredWindowAttributes(main_window, 0, 255, LWA_ALPHA);
+			return DefWindowProc(window, message, wparam, lparam);
+		case WM_KILLFOCUS:
+			SetLayeredWindowAttributes(main_window, 0, 255 * 0.4 , LWA_ALPHA);
+			return DefWindowProc(window, message, wparam, lparam);
+		case WM_TIMER:
+			move_enemy_window();
+			move_bullets();
+			InvalidateRect(player_window, nullptr, true);
+			InvalidateRect(enemy_window, nullptr, true);
+			InvalidateRect(main_window, nullptr, true);
+			return 0;
+		case WM_PAINT:
+			dc = BeginPaint(window, &ps);
+			//GetClientRect(main_window, &main_rc);
+			output_buffer = CreateCompatibleDC(dc);
+			if (is_bitmap_set)
+			{
+				if (is_filled)
+					fill_bitmap(dc);
+				else if (is_fit)
+					fit_bitmap(dc);
+				else if (is_centered)
+					center_bitmap(dc);
+				else if (is_tiled)
+					tile_bitmap(dc);
+				else
+					render_bitmap(dc);
+			}
+			SetBkMode(dc, TRANSPARENT);
+			score_text = L"Score: " + std::to_wstring(score);
+			TextOutW(dc, 10, 10, score_text.c_str(), score_text.length());
+			DeleteDC(output_buffer);
+			EndPaint(window, &ps);
+			return 0;
 
-		GetClientRect(main_window, &main_rc);
-		output_buffer = CreateCompatibleDC(dc);
-		output_bitmap = CreateCompatibleBitmap(output_buffer, window_width, window_height);
-
-		old_bitmap = (HBITMAP)SelectObject(output_buffer, output_bitmap);
-		FillRect(output_buffer, &main_rc, background_brush);
-
-		if (is_bitmap_set)
-		{
-			if (is_filled)
-				fill_bitmap(dc);
-			else if (is_fit)
-				fit_bitmap(dc);
-			else if (is_centered)
-				center_bitmap(dc);
-			else if (is_tiled)
-				tile_bitmap(dc);
-			else
-				render_bitmap(dc);
-		}
-
-		SetBkMode(dc, TRANSPARENT);
-
-		score_text = L"Score: " + std::to_wstring(score);
-		//TextOutW(output_buffer, 10, 10, score_text.c_str(), score_text.length());
-
-		TextOutW(dc, 10, 10, score_text.c_str(), score_text.length());
-
-		DeleteObject(output_bitmap);
-		DeleteDC(output_buffer);
-		EndPaint(window, &ps);
-		return 0;
-
-	case WM_KEYDOWN:
-		switch (wparam)
-		{
-			case VK_LEFT:
-				move_player_window(0);
-				break;
-			case VK_RIGHT:
-				move_player_window(1);
-				break;
-			case VK_SPACE:
-				create_bullets();
-				break;
-		}
-		return 0;
-	// WM_COMMAND IS RECEIVED WHENEVER THE ID ITEM IS CHOSEN
-	case WM_COMMAND:
-		on_command(LOWORD(wparam));// the lower 16 bits of the DWORD wparam contains the identifier for the command
-		return 0;
-	case WM_CTLCOLORSTATIC:
-		return reinterpret_cast<INT_PTR>(bullet_brush);
-	default:
- 		return DefWindowProc(window, message, wparam, lparam);
+		case WM_KEYDOWN:
+			switch (wparam)
+			{
+				case VK_LEFT:
+					move_player_window(0);
+					break;
+				case VK_RIGHT:
+					move_player_window(1);
+					break;
+				case VK_SPACE:
+					create_bullets();
+					break;
+			}
+			return 0;
+		// WM_COMMAND IS RECEIVED WHENEVER THE ID ITEM IS CHOSEN
+		case WM_COMMAND:
+			on_command(LOWORD(wparam));// the lower 16 bits of the DWORD wparam contains the identifier for the command
+			return 0;
+		case WM_CTLCOLORSTATIC:
+			return reinterpret_cast<INT_PTR>(bullet_brush);
+		default:
+ 			return DefWindowProc(window, message, wparam, lparam);
 	}
 }
-
 
 void app::choose_background_color_file()
 {
@@ -677,10 +631,7 @@ void app::set_background_color(COLORREF color)
 
 	SetClassLongPtr(main_window, GCLP_HBRBACKGROUND, (LONG_PTR)background_brush); // sets background color
 	is_bitmap_set = false;
-
-	//redraw_background();
-
-	InvalidateRect(main_window, nullptr, true);  
+	//InvalidateRect(main_window, nullptr, true);  
 	//UpdateWindow(main_window); // immediate redraw  
 }
 
@@ -690,8 +641,6 @@ void app::set_background(LPWSTR file_name)
 	background_bitmap = bitmap;
 	is_bitmap_set = true;
 	InvalidateRect(main_window, nullptr, false);
-
-	//DeleteObject(bitmap);
 }
 
 void app::render_bitmap(HDC dc)
@@ -700,7 +649,6 @@ void app::render_bitmap(HDC dc)
 	HBITMAP old_bitmap = (HBITMAP)SelectObject(memory_context, background_bitmap);
 	BitBlt(dc, 0, 0, window_width, window_height, memory_context, 0, 0, SRCCOPY);
 	SelectObject(dc, old_bitmap);
-
 	DeleteDC(memory_context);
 }
 
@@ -720,20 +668,16 @@ void app::center_bitmap(HDC dc)
 			BitBlt(dc, width / 2 - bitmap_info.bmWidth / 2,
 				height / 2 - bitmap_info.bmHeight / 2, window_width, window_height,
 				memory_context,
-				0, 0,
-				SRCCOPY);
+				0, 0, SRCCOPY);
 		}
 		else
 		{
-			BitBlt(dc, 0,
-				0, window_width, window_height,
-				memory_context,
+			BitBlt(dc, 0, 0, window_width, window_height,memory_context,
 				bitmap_info.bmWidth/2 - window_width/2, bitmap_info.bmHeight/2 - window_height/2,
 				SRCCOPY);
 		}
 		SelectObject(dc, old_bitmap);
 	}
-
 	DeleteDC(memory_context);
 }
 
@@ -757,10 +701,10 @@ void app::fill_bitmap(HDC dc)
 	DeleteDC(memory_context);
 }
 
+// we need o match the dimensions of the image, so that it would not be distorted
+// prone to rounding errors
 void app::fit_bitmap(HDC dc)
 {
-	// we need o match the dimensions of the image, so that it would not be distorted
-	// prone to rounding errors
 	HDC memory_context = CreateCompatibleDC(dc);
 	HBITMAP old_bitmap = nullptr;
 	BITMAP bitmap_info;
@@ -839,34 +783,16 @@ void app::redraw_background()
 	ReleaseDC(main_window, dc);
 }
 
-void app::create_dialog_box()
-{
-	//DialogBoxW();
-}
-
-
 void app::render_plane_sprites(HDC dc)
 {
 	static int current_frame = 0;
 	static const int no_of_frames = 3;
-
 	HDC memory_context = CreateCompatibleDC(dc);
-
 	SelectObject(memory_context, plane_bitmap);
-
 	int x = (current_frame % no_of_frames) * player_width;
 	int y = 0;
-
 	current_frame = (current_frame + 1) % no_of_frames;
-
-	//COLORREF color_to_exclude = GetPixel(memory_context, 0, 0); // extracts the color ofthe pixel
-
-	//BitBlt(dc, 0, 0, player_width, player_height, memory_context, x, y, SRCCOPY);
-	
 	TransparentBlt(dc, 0, 0, player_width, player_height, memory_context, x, y, 50, 50, color_to_exclude);
-	//BitBlt(dc, 400, 400, player_width, player_height, memory_context, x, y, SRCCOPY);
-
-
 	DeleteDC(memory_context);
 }
 
@@ -874,29 +800,13 @@ void app::render_enemy_sprites(HDC dc)
 {
 	static int current_frame = 0;
 	static const int no_of_frames = 4;
-
 	//HDC client_area = GetDC(main_window); //extracts the dra context for the client area
 	HDC memory_context = CreateCompatibleDC(dc);
-
 	SelectObject(memory_context, enemy_bitmap);
-
 	int x = (current_frame % no_of_frames) * enemy_width;
 	int y = 0;
-
 	current_frame = (current_frame + 1) % no_of_frames;
-
-
-	//BLENDFUNCTION blendFunc;
-	//blendFunc.BlendOp = AC_SRC_OVER;
-	//blendFunc.BlendFlags = 0;
-	//blendFunc.SourceConstantAlpha = 0; // Full opacity
-	//blendFunc.AlphaFormat = AC_SRC_ALPHA; // Use per-pixel alpha
-
-	//AlphaBlend(dc, 0, 0, enemy_width, enemy_height, memory_context, x, y, 50, 40, blendFunc);
-
 	TransparentBlt(dc, 0, 0, enemy_width, enemy_height, memory_context, x, y, 50, 40, color_to_exclude);
-	//BitBlt(dc,0,0, enemy_width, enemy_height, memory_context, x, y, SRCCOPY);
-
 	DeleteDC(memory_context);
 }
 
@@ -912,15 +822,12 @@ void app::reset_game()
 	MoveWindow(player_window, window_width / 2 - player_width / 2, window_height - window_height / 4 - player_height, player_width, player_height, true);
 	MoveWindow(enemy_window, window_width / 2 - enemy_width / 2, window_height / 6, enemy_width, enemy_height, true);
 
-	//is_redraw_background = true;
-
 	InvalidateRect(enemy_window, nullptr, true);
 	InvalidateRect(player_window, nullptr, true);
 	InvalidateRect(main_window, nullptr, true);
 	enemy_window_direction = 1;
 	score = 0;
 }
-
 
 void app::resize_window(float factor)
 {
@@ -938,13 +845,14 @@ void app::resize_window(float factor)
 	reset_game();
 }
 
-
 app::~app()
 {
 	DeleteObject(player_brush);
 	DeleteObject(enemy_brush);
 	DeleteObject(background_brush);
 	DeleteObject(bullet_brush);
+	DeleteObject(plane_bitmap);
+	DeleteObject(enemy_bitmap);
 	KillTimer(main_window, 1);
 	if (background_bitmap != nullptr)
 		DeleteObject(background_bitmap);
@@ -1015,3 +923,35 @@ app::~app()
 		old_bitmap = (HBITMAP)SelectObject(memory_context, bitmap);*/
 
 		//SetBkMode(output_buffer, TRANSPARENT);
+
+
+	//BitBlt(dc,0,0, enemy_width, enemy_height, memory_context, x, y, SRCCOPY);
+
+	//BitBlt(dc, 400, 400, player_width, player_height, memory_context, x, y, SRCCOPY);
+
+//RECT score_rect = { 10, 10, 50, 50 };  
+			//InvalidateRect(main_window, &score_rect, true); // ensures that we erase the previous result
+			//InvalidateRect(main_window, nullptr, false); // fix this
+			//update_score();
+
+/*ShowWindow(player_window, SW_SHOWNA);
+	ShowWindow(enemy_window, SW_SHOWNA);*/
+
+//void app::update_score()
+//{
+//	std::wstring score_text; // initialisation bypasses case label fix
+//	HDC dc = GetDC(main_window);
+//	SetBkMode(dc, TRANSPARENT);
+//
+//	score_text = L"Score: " + std::to_wstring(score);
+//	TextOutW(dc, 10, 10, score_text.c_str(), score_text.length());
+//
+//	ReleaseDC(main_window, dc);
+//}
+
+/*output_bitmap = CreateCompatibleBitmap(output_buffer, window_width, window_height);
+
+			old_bitmap = (HBITMAP)SelectObject(output_buffer, output_bitmap);
+			FillRect(output_buffer, &main_rc, background_brush);*/
+
+			//DeleteObject(output_bitmap);
