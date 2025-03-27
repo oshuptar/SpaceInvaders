@@ -29,11 +29,6 @@ enum enum_file_display_mode
 	fit,
 };
 
-enum display_mode
-{
-
-};
-
 class app
 {
 private:
@@ -59,7 +54,7 @@ private:
 	bool is_centered = false;
 	bool is_tiled = false;
 	bool is_fit = false;
-	
+
 	std::wstring bitmap_file_path;
 	std::wstring stored_data;
 	HBITMAP plane_bitmap;
@@ -71,7 +66,12 @@ private:
 
 	HWND create_window(DWORD style, DWORD ex_style, HWND parent = nullptr);
 	HWND create_window_other(DWORD style, DWORD ex_style, int x, int y, int width, int height, LPCWSTR class_name, HWND parent);
-	HWND create_child_window(int width, int height,int x, int y);
+	HWND create_child_window(int width, int height, int x, int y);
+
+	static INT_PTR CALLBACK dialog_procedure(HWND handle,
+		UINT message,
+		WPARAM message_info,
+		LPARAM other_info);
 
 	static LRESULT CALLBACK static_window_proc(HWND window, UINT message,
 		WPARAM wparam, LPARAM lparam);
@@ -91,6 +91,7 @@ private:
 	LRESULT window_proc_player(HWND window, UINT message,
 		WPARAM wparam, LPARAM lparam);
 
+
 	void redraw_background();
 	void move_player_window(int direction);
 	void move_enemy_window();
@@ -100,6 +101,7 @@ private:
 	void reset_game();
 	void resize_window(float factor); // small -> half of the dimension size; medium -> default size; large -> twice the default_size
 
+	void input_name_routine();
 	void render_plane_sprites(HDC dc);
 	void render_enemy_sprites(HDC dc);
 	void checkbox_handle(WORD id);
@@ -115,8 +117,6 @@ private:
 	void save_configuration_routine();
 	void load_configuration_routine();
 
-	static int enemy_window_direction; // 1 signs - right; 0 - signs left
-
 	static constexpr int default_window_width = 800;
 	static constexpr int default_window_height = 600;
 	static constexpr int bullet_width = 5;
@@ -125,6 +125,7 @@ private:
 	static constexpr int enemy_height = 40;
 	static constexpr int player_width = 50;
 	static constexpr int player_height = 50;
+	static int enemy_window_direction; // 1 signs - right; 0 - signs left
 
 	int window_width = default_window_width;
 	int window_height = default_window_height;

@@ -145,6 +145,9 @@
     <Image Include="bitmap1.bmp" />
     <Image Include="icon1.ico" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\..\..\username.bin" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

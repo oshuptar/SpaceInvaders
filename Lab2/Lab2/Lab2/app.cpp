@@ -431,6 +431,7 @@ void app::on_command(WORD id)
 			DestroyWindow(main_window);
 			break;
 		case ID_NEW_GAME:
+			input_name_routine();
 			reset_game();
 			break;
 		case ID_SMALL_SIZE:
@@ -947,6 +948,45 @@ void app::load_configuration_routine()
 		InvalidateRect(main_window, nullptr, false);
 	}
 }
+
+INT_PTR CALLBACK app::dialog_procedure(HWND handle, UINT message, WPARAM info, LPARAM other_info)
+{
+	wchar_t player_name[50];
+	BOOL result;
+	std::wstring score_message;
+	int* score;
+	switch (message)
+	{
+		case WM_INITDIALOG:
+			score = reinterpret_cast<int*>(other_info);
+			score_message = L"Your score: " + std::to_wstring(*score);
+			result = SetDlgItemTextW(handle, IDC_STATIC, score_message.c_str());
+			return TRUE;
+		case WM_COMMAND:
+
+			switch (LOWORD(info))
+			{
+			case IDOK:
+				result = GetDlgItemTextW(handle, IDC_EDIT1, player_name, 50);
+				EndDialog(handle, ID_OK);
+				return TRUE;
+			case IDCANCEL:
+				EndDialog(handle, ID_CANCEL);
+				return TRUE;
+			}
+			return TRUE;
+		case WM_CLOSE:
+			EndDialog(handle, IDCANCEL);
+			return TRUE;
+	}
+	return FALSE;
+}
+
+void app::input_name_routine()
+{
+	DialogBoxParamW(app_instance, MAKEINTRESOURCEW(ID_USER_DIALOG), main_window, dialog_procedure, (LPARAM)&score);
+}
+
 
 void app::reset_game()
 {
