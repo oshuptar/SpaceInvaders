@@ -639,12 +639,14 @@ void app::set_background_color(COLORREF color)
 
 	SetClassLongPtr(main_window, GCLP_HBRBACKGROUND, (LONG_PTR)background_brush); // sets background color
 	is_bitmap_set = false;
-	//InvalidateRect(main_window, nullptr, true);  
-	//UpdateWindow(main_window); // immediate redraw  
+	
 }
 
 void app::set_background(LPWSTR file_name)
 {
+	if (background_bitmap != nullptr)
+		DeleteObject(background_bitmap);
+
 	HBITMAP bitmap = (HBITMAP)LoadImageW(nullptr, file_name, IMAGE_BITMAP, 0 , 0, LR_LOADFROMFILE | LR_DEFAULTSIZE);
 	background_bitmap = bitmap;
 	bitmap_file_path = file_name;
@@ -788,7 +790,6 @@ void app::redraw_background()
 	RECT main_rc;
 	GetClientRect(main_window,&main_rc);
 	FillRect(dc, &main_rc, background_brush);
-	//is_redraw_background = false;
 	ReleaseDC(main_window, dc);
 }
 
