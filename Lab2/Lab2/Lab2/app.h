@@ -7,6 +7,8 @@
 #include <chrono>
 #include <WinBase.h>
 
+#define MAX_DIRETCORY_PATH 200
+
 class bullet
 {
 public:
@@ -18,9 +20,9 @@ public:
 	{}
 };
 
-enum file_display_mode
+enum enum_file_display_mode
 {
-	none,
+	none = 0,
 	filled,
 	centered,
 	tiled,
@@ -47,16 +49,16 @@ private:
 	HBITMAP background_bitmap;
 	POINT screen_size;
 	HINSTANCE app_instance;
-
+	wchar_t directory_path[MAX_DIRETCORY_PATH];
 	COLORREF background_color = RGB(255, 255, 255);
 
-	file_display_mode file_display_mode;
+	enum_file_display_mode file_display_mode = none;
 
-	bool is_bitmap_set;
-	bool is_filled;
-	bool is_centered;
-	bool is_tiled;
-	bool is_fit;
+	bool is_bitmap_set = false;
+	bool is_filled = false;
+	bool is_centered = false;
+	bool is_tiled = false;
+	bool is_fit = false;
 	
 	std::wstring bitmap_file_path;
 	std::wstring stored_data;

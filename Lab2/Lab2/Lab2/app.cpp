@@ -23,8 +23,11 @@ enemy_bitmap{LoadBitmapW(app_instance, MAKEINTRESOURCEW(ID_ENEMIES_BITMAP))}
 {
 	load_configuration_routine();
 
+	GetCurrentDirectory(MAX_DIRETCORY_PATH, directory_path);
+
 	DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_BORDER;// | WS_CLIPCHILDREN;
 	DWORD ex_style = WS_EX_LAYERED | WS_EX_TOPMOST;
+
 
 	register_class();
 	register_class_enemy();
@@ -816,7 +819,7 @@ void app::render_enemy_sprites(HDC dc)
 	DeleteDC(memory_context);
 }
 
-std::wstring convert_enum_to_string(file_display_mode file_display_mode)
+std::wstring convert_enum_to_string(enum_file_display_mode file_display_mode)
 {
 	switch (file_display_mode)
 	{
@@ -830,32 +833,118 @@ std::wstring convert_enum_to_string(file_display_mode file_display_mode)
 		return L"tiled";
 	case fit:
 		return L"fit";
+	default:
+		return L"none"; // ?????? - comment this case and see the behavior
 	}
+}
+
+enum_file_display_mode convert_string_to_enum(std::wstring string)
+{
+	if (std::wcscmp(string.c_str(), L"none") == 0) //wstring comparisons
+		return none;
+	else if (std::wcscmp(string.c_str(), L"filled") == 0)
+		return filled;
+	else if (std::wcscmp(string.c_str(), L"centered") == 0)
+		return centered;
+	else if (std::wcscmp(string.c_str(), L"tiled") == 0)
+		return tiled;
+	else if (std::wcscmp(string.c_str(), L"fit") == 0)
+		return fit;
 }
 
 void app::save_configuration_routine()
 {
+	stored_data.clear();
+
+	stored_data += L"Is_bitmap_set=" + std::to_wstring(is_bitmap_set ? 1 : 0) + L'\0';
 	stored_data += L"Width=" + std::to_wstring(window_width) + L'\0';
 	stored_data += L"Height=" + std::to_wstring(window_height) + L'\0';
 	stored_data += L"Score=" + std::to_wstring(score) + L'\0';
 	stored_data += L"DisplayMode=" + convert_enum_to_string(file_display_mode) + L'\0';
-	stored_data += L"Is_bitmap_set" + std::to_wstring(is_bitmap_set ? 1 : 0) + L'\0';
+	stored_data += L"BackgroundColor=" + std::to_wstring(background_color) + L'\0'; // COLORREF is just a DWORD
 	if (is_bitmap_set)
 	{
-		stored_data += L"DisplayFile=" + bitmap_file_path + L'\0';
+		stored_data += L"DisplayFile=" + bitmap_file_path;
 	}
-	stored_data += L"BackgroundColor=" + std::to_wstring(background_color) + L'\0'; // COLORREF is just a DWORD
 	stored_data += L'\0';
-	WriteProfileSectionW(s_application_name.c_str(), stored_data.c_str());
+	wchar_t file_path[MAX_DIRETCORY_PATH + 50];
+	swprintf_s(file_path, L"%s\\config.ini", directory_path);
+	BOOL result = WritePrivateProfileSectionW(s_application_name.c_str(), stored_data.c_str(), file_path);
 }
 
 void app::load_configuration_routine()
 {
+	HMENU menu = GetMenu(main_window);
 	wchar_t buffer[1000];
-	DWORD result = GetProfileSectionW(s_application_name.c_str(), buffer, sizeof(buffer) / sizeof(wchar_t));
+	std::wstring data[7];
+   	std::wstring display_file;
+	DWORD result = GetPrivateProfileSectionW(s_application_name.c_str(), buffer, sizeof(buffer) / sizeof(wchar_t), L".\\config.ini");
 	
-	window_width = std::stoi(buffer + 6);
-	window_height = std::stoi()
+	int i = 0;
+	int objects_parsed = 0;
+	bool start_reading = false;
+	//bool is_bitmap_set = false;
+	if (result == 0)
+		return;
+
+	while (result)
+	{
+		if (start_reading)
+			data[objects_parsed] += buffer[i];
+		
+		if (buffer[i] == L'=') {
+			start_reading = true;
+		}
+		else if (buffer[i] == L'\0') {
+			start_reading = false;
+			objects_parsed++;
+		}
+		
+		result--;
+		i++;
+	}
+
+	window_width = stoi(data[1]);
+	window_height = stoi(data[2]);
+	score = stoi(data[3]);
+	file_display_mode = convert_string_to_enum(data[4]);
+
+	switch (file_display_mode)
+	{
+	case filled:
+		is_filled = true;
+		CheckMenuItem(menu, ID_FILL, MF_CHECKED);
+		break;
+	case centered:
+		is_centered = true;
+		CheckMenuItem(menu, ID_CENTER, MF_CHECKED);
+		break;
+	case tiled:
+		is_tiled = true;
+		CheckMenuItem(menu, ID_TILE, MF_CHECKED);
+		break;
+	case fit:
+		is_fit = true;
+		CheckMenuItem(menu, ID_FIT, MF_CHECKED);
+		break;
+	}
+	background_color = std::stoul(data[5]);
+	set_background_color(background_color);
+
+	CheckMenuItem(menu, ID_BACKGROUND_COLOR, MF_CHECKED);
+
+	is_bitmap_set = stoi(data[0]) == 1 ? true : false; // because set_background_color sets is_bitmap_set to fase
+	if (is_bitmap_set)
+	{
+		bitmap_file_path = data[6];
+		HBITMAP bitmap = (HBITMAP)LoadImageW(nullptr, bitmap_file_path.c_str(), IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE);
+		background_bitmap = bitmap;
+		
+		CheckMenuItem(menu, ID_BACKGROUND_COLOR, MF_UNCHECKED);
+		CheckMenuItem(menu, ID_BACKGROUND_IMAGE, MF_CHECKED);
+
+		InvalidateRect(main_window, nullptr, false);
+	}
 }
 
 void app::reset_game()
