@@ -966,11 +966,11 @@ INT_PTR CALLBACK app::dialog_procedure(HWND handle, UINT message, WPARAM info, L
 
 			switch (LOWORD(info))
 			{
-			case IDOK:
+			case ID_OK:
 				result = GetDlgItemTextW(handle, IDC_EDIT1, player_name, 50);
 				EndDialog(handle, ID_OK);
 				return TRUE;
-			case IDCANCEL:
+			case ID_CANCEL:
 				EndDialog(handle, ID_CANCEL);
 				return TRUE;
 			}
